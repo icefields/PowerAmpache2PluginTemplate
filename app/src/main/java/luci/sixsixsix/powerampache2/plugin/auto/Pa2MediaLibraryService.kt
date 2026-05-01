@@ -18,7 +18,6 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.net.Uri
 import android.os.IBinder
-import luci.sixsixsix.powerampache2.plugin.PA2DataFetchService
 import androidx.concurrent.futures.CallbackToFutureAdapter
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -37,27 +36,87 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNot
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import luci.sixsixsix.powerampache2.plugin.PA2DataFetchService
+import luci.sixsixsix.powerampache2.plugin.R
 import luci.sixsixsix.powerampache2.plugin.domain.MusicFetcher
 import luci.sixsixsix.powerampache2.plugin.domain.model.Album
 import luci.sixsixsix.powerampache2.plugin.domain.model.Playlist
-import luci.sixsixsix.powerampache2.plugin.R
 import luci.sixsixsix.powerampache2.plugin.domain.model.Song
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.FavouriteAlbumStateFlow
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.GetAlbumsFromArtistUseCase
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.GetAlbumsUseCase
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.GetArtistsUseCase
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.GetSongsFromAlbumUseCase
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.GetSongsFromPlaylistUseCase
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.HighestAlbumsStateFlow
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.LatestAlbumsStateFlow
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.PlaylistsStateFlow
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.QueueStateFlow
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.RecentAlbumsStateFlow
+import java.util.Collections.emptyList
+import java.util.Collections.emptyMap
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class Pa2MediaLibraryService : MediaLibraryService() {
 
-    @Inject lateinit var musicFetcher: MusicFetcher
-    @Inject lateinit var applicationScope: CoroutineScope
+    /** ExoPlayer + MediaLibrarySession must run on the main thread; [serviceScope] is IO. */
+    //private val mainScopeJob = SupervisorJob()
+    // private val mainScope = CoroutineScope(mainScopeJob + Dispatchers.Main)
+    private val serviceScopeJob = SupervisorJob()
+    private val serviceScope: CoroutineScope = CoroutineScope(Dispatchers.IO + serviceScopeJob)
 
-    /** ExoPlayer + MediaLibrarySession must run on the main thread; [applicationScope] is IO. */
-    private val mainScopeJob = SupervisorJob()
-    private val mainScope = CoroutineScope(mainScopeJob + Dispatchers.Main)
+    // USE CASES
+    @Inject lateinit var playlistsStateFlow: PlaylistsStateFlow
+    @Inject lateinit var favouriteAlbumStateFlow: FavouriteAlbumStateFlow
+    @Inject lateinit var getAlbumsFromArtistUseCase: GetAlbumsFromArtistUseCase
+    @Inject lateinit var getAlbumsUseCase: GetAlbumsUseCase
+    @Inject lateinit var getArtistsUseCase: GetArtistsUseCase
+    @Inject lateinit var getSongsFromAlbumUseCase: GetSongsFromAlbumUseCase
+    @Inject lateinit var getSongsFromPlaylistUseCase: GetSongsFromPlaylistUseCase
+    @Inject lateinit var highestAlbumsStateFlow: HighestAlbumsStateFlow
+    @Inject lateinit var recentAlbumsStateFlow: RecentAlbumsStateFlow
+    @Inject lateinit var latestAlbumsStateFlow: LatestAlbumsStateFlow
+    @Inject lateinit var queueStateFlow: QueueStateFlow
+
+    val playlistSongsMapFlow = playlistsStateFlow()
+        .filterNotNull()
+        .distinctUntilChanged()
+        .flatMapLatest { playlists ->
+            combine(playlists.map { playlist ->
+                getSongsFromPlaylistUseCase(playlist.id).map { songs -> playlist to songs }
+            }) { results -> results.associate { (pl, songs) -> pl to songs } }
+        }.stateIn(
+            scope = serviceScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyMap()
+        )
+
+    val albumSongsMapFlow = getAlbumsUseCase()
+        .filterNotNull()
+        .distinctUntilChanged()
+        .flatMapLatest { albums ->
+            combine(albums.map { album ->
+                getSongsFromAlbumUseCase(album.id).map { songs -> album to songs }
+            }) { results -> results.associate { (al, songs) -> al to songs } }
+        }.stateIn(
+            scope = serviceScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyMap()
+        )
 
     private var player: ExoPlayer? = null
     private var librarySession: MediaLibrarySession? = null
@@ -91,50 +150,77 @@ class Pa2MediaLibraryService : MediaLibraryService() {
 
     private fun subscribeToLibraryChanges() {
         val session = librarySession ?: return
-        mainScope.launch {
-            musicFetcher.playlistsFlow.collect {
-                session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
-                session.notifyChildrenChanged(MediaIds.SECTION_PLAYLISTS, 0, null)
-            }
-        }
-        mainScope.launch {
-            musicFetcher.favouriteAlbumsFlow.collect {
-                session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
-                session.notifyChildrenChanged(MediaIds.SECTION_FAVOURITE_ALBUMS, 0, null)
-            }
-        }
-        mainScope.launch {
-            musicFetcher.recentAlbumsFlow.collect {
-                session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
-                session.notifyChildrenChanged(MediaIds.SECTION_RECENT_ALBUMS, 0, null)
-            }
-        }
-        mainScope.launch {
-            musicFetcher.latestAlbumsFlow.collect {
-                session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
-                session.notifyChildrenChanged(MediaIds.SECTION_LATEST_ALBUMS, 0, null)
-            }
-        }
-        mainScope.launch {
-            musicFetcher.highRatedAlbumsFlow.collect {
-                session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
-                session.notifyChildrenChanged(MediaIds.SECTION_HIGHEST_RATED_ALBUMS, 0, null)
-            }
-        }
-        mainScope.launch {
-            musicFetcher.playlistSongsMapFlow.collect {
-                it.keys.forEach { pid ->
-                    session.notifyChildrenChanged(MediaIds.playlist(pid), 0, null)
+        serviceScope.launch {
+            playlistsStateFlow().collectLatest {
+                withContext(Dispatchers.Main) {
+                    session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
+                    session.notifyChildrenChanged(MediaIds.SECTION_PLAYLISTS, 0, null)
                 }
             }
         }
-        mainScope.launch {
-            musicFetcher.albumSongsMapFlow.collect {
-                it.keys.forEach { aid ->
-                    session.notifyChildrenChanged(MediaIds.album(aid), 0, null)
+        serviceScope.launch {
+            favouriteAlbumStateFlow().collectLatest {
+                withContext(Dispatchers.Main) {
+                    session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
+                    session.notifyChildrenChanged(MediaIds.SECTION_FAVOURITE_ALBUMS, 0, null)
                 }
             }
         }
+        serviceScope.launch {
+            recentAlbumsStateFlow().collectLatest {
+                withContext(Dispatchers.Main) {
+                    session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
+                    session.notifyChildrenChanged(MediaIds.SECTION_RECENT_ALBUMS, 0, null)
+                }
+            }
+        }
+        serviceScope.launch {
+            latestAlbumsStateFlow().collectLatest {
+                withContext(Dispatchers.Main) {
+                    session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
+                    session.notifyChildrenChanged(MediaIds.SECTION_LATEST_ALBUMS, 0, null)
+                }
+            }
+        }
+        serviceScope.launch {
+            highestAlbumsStateFlow().collectLatest {
+                withContext(Dispatchers.Main) {
+                    session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
+                    session.notifyChildrenChanged(MediaIds.SECTION_HIGHEST_RATED_ALBUMS, 0, null)
+                }
+            }
+        }
+
+        serviceScope.launch {
+            playlistsStateFlow().collectLatest { playlists ->
+                playlists.map { pl -> pl.id }.forEach { pid ->
+                    // Ensure the operation of notifying children happens on the correct thread
+                    withContext(Dispatchers.Main) {
+                        // Notify about the change in media session, this needs to run on the main thread
+                        session.notifyChildrenChanged(MediaIds.playlist(pid), 0, null)
+                    }
+                }
+            }
+        }
+
+        serviceScope.launch {
+            getAlbumsUseCase().collectLatest { albums ->
+                albums.map { album -> album.id }.forEach { aid ->
+                    // Ensure the operation of notifying children happens on the correct thread
+                    withContext(Dispatchers.Main) {
+                        // Notify about the change in media session, this needs to run on the main thread
+                        session.notifyChildrenChanged(MediaIds.album(aid), 0, null)
+                    }
+                }
+            }
+        }
+//        mainScope.launch {
+//            musicFetcher.albumSongsMapFlow.collectLatest {
+//                it.keys.forEach { aid ->
+//                    session.notifyChildrenChanged(MediaIds.album(aid), 0, null)
+//                }
+//            }
+//        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
@@ -145,7 +231,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             runCatching { unbindService(dataFetchConnection) }
             dataFetchBound = false
         }
-        mainScopeJob.cancel()
+        serviceScopeJob.cancel()
         librarySession?.run {
             player?.release()
             release()
@@ -220,7 +306,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_PLAYLISTS -> immediateChildren(
                     sliceForPage(
-                        musicFetcher.playlistsFlow.value.map { playlistItem(it) },
+                        playlistsStateFlow().value.map { playlistItem(it) },
                         page,
                         pageSize
                     ),
@@ -228,7 +314,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_FAVOURITE_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        musicFetcher.favouriteAlbumsFlow.value.map { albumItem(it) },
+                        favouriteAlbumStateFlow().value.map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -236,7 +322,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_RECENT_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        musicFetcher.recentAlbumsFlow.value.map { albumItem(it) },
+                        recentAlbumsStateFlow().value.map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -244,7 +330,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_LATEST_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        musicFetcher.latestAlbumsFlow.value.map { albumItem(it) },
+                        latestAlbumsStateFlow().value.map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -252,7 +338,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_HIGHEST_RATED_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        musicFetcher.highRatedAlbumsFlow.value.map { albumItem(it) },
+                        highestAlbumsStateFlow().value.map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -303,7 +389,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 else -> {
                     val pid = MediaIds.parsePlaylistId(mediaId)
                     if (pid != null) {
-                        musicFetcher.playlistsFlow.value.find { it.id == pid }?.let { playlistItem(it) }
+                        playlistsStateFlow().value.find { it.id == pid }?.let { playlistItem(it) }
                     } else {
                         val aid = MediaIds.parseAlbumId(mediaId)
                         if (aid != null) {
@@ -481,11 +567,11 @@ class Pa2MediaLibraryService : MediaLibraryService() {
 
         private fun findAlbum(albumId: String): Album? {
             val inList: (List<Album>) -> Album? = { list -> list.find { it.id == albumId } }
-            return inList(musicFetcher.favouriteAlbumsFlow.value)
-                ?: inList(musicFetcher.recentAlbumsFlow.value)
-                ?: inList(musicFetcher.latestAlbumsFlow.value)
-                ?: inList(musicFetcher.highRatedAlbumsFlow.value)
-                ?: inList(musicFetcher.albumsFlow.value)
+            return inList(favouriteAlbumStateFlow().value)
+                ?: inList(recentAlbumsStateFlow().value)
+                ?: inList(latestAlbumsStateFlow().value)
+                ?: inList(highestAlbumsStateFlow().value)
+                ?: inList(albumSongsMapFlow.value.keys.toList())
         }
 
         private fun playlistChildrenFuture(
@@ -495,20 +581,14 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             params: MediaLibraryService.LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             return CallbackToFutureAdapter.getFuture { completer ->
-                applicationScope.launch {
+                serviceScope.launch {
                     val songs: List<Song> = runCatching {
-                        val cached = musicFetcher.playlistSongsMapFlow.value[playlistId]
-                        if (!cached.isNullOrEmpty()) {
-                            cached
-                        } else {
-                            musicFetcher.getSongsFromPlaylist(playlistId)
-                            withTimeoutOrNull(FETCH_TIMEOUT_MS) {
-                                musicFetcher.playlistSongsMapFlow
-                                    .map { it[playlistId] ?: emptyList() }
-                                    .distinctUntilChanged()
-                                    .first { it.isNotEmpty() }
-                            } ?: emptyList()
-                        }
+                        withTimeoutOrNull(FETCH_TIMEOUT_MS) {
+                            getSongsFromPlaylistUseCase(playlistId)
+                                .filterNotNull()
+                                .filterNot { it.isEmpty() }
+                                .first()
+                        } ?: emptyList()
                     }.getOrDefault(emptyList())
                     val playable = songs.map { this@Pa2MediaLibraryService.songToPlayableMediaItem(it) }
                     val paged = sliceForPage(playable, page, pageSize)
@@ -530,20 +610,14 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             params: MediaLibraryService.LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             return CallbackToFutureAdapter.getFuture { completer ->
-                applicationScope.launch {
+                serviceScope.launch {
                     val songs: List<Song> = runCatching {
-                        val cached = musicFetcher.albumSongsMapFlow.value[albumId]
-                        if (!cached.isNullOrEmpty()) {
-                            cached
-                        } else {
-                            musicFetcher.getSongsFromAlbum(albumId)
-                            withTimeoutOrNull(FETCH_TIMEOUT_MS) {
-                                musicFetcher.albumSongsMapFlow
-                                    .map { it[albumId] ?: emptyList() }
-                                    .distinctUntilChanged()
-                                    .first { it.isNotEmpty() }
-                            } ?: emptyList()
-                        }
+                        withTimeoutOrNull(FETCH_TIMEOUT_MS) {
+                            getSongsFromAlbumUseCase(albumId)
+                                .filterNotNull()
+                                .filterNot { it.isEmpty() }
+                                .first()
+                        } ?: emptyList()
                     }.getOrDefault(emptyList())
                     val playable = songs.map { this@Pa2MediaLibraryService.songToPlayableMediaItem(it) }
                     val paged = sliceForPage(playable, page, pageSize)
@@ -568,9 +642,11 @@ class Pa2MediaLibraryService : MediaLibraryService() {
      * metadata and widgets can track host updates without freezing on an early return.
      */
     private fun subscribeToHostQueueMirror() {
-        mainScope.launch {
-            musicFetcher.currentQueueFlow.collect { queue ->
-                syncPlayerFromHostQueue(queue)
+        serviceScope.launch {
+            queueStateFlow().collectLatest { queue ->
+                withContext(Dispatchers.Main) {
+                    syncPlayerFromHostQueue(queue)
+                }
             }
         }
     }
@@ -618,13 +694,13 @@ class Pa2MediaLibraryService : MediaLibraryService() {
      * timeline has multiple windows. Rebuild the queue from the cached playlist/album song list.
      */
     private fun expandQueueForSong(songId: String): Pair<List<MediaItem>, Int>? {
-        for (songs in musicFetcher.playlistSongsMapFlow.value.values) {
+        for (songs in playlistSongsMapFlow.value.values) {
             val idx = songs.indexOfFirst { it.id == songId || it.mediaId == songId }
             if (idx >= 0) {
                 buildPlayableQueueWithStartIndex(songs, idx)?.let { return it }
             }
         }
-        for (songs in musicFetcher.albumSongsMapFlow.value.values) {
+        for (songs in albumSongsMapFlow.value.values) {
             val idx = songs.indexOfFirst { it.id == songId || it.mediaId == songId }
             if (idx >= 0) {
                 buildPlayableQueueWithStartIndex(songs, idx)?.let { return it }
@@ -632,6 +708,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         }
         return null
     }
+
 
     private fun buildPlayableQueueWithStartIndex(songs: List<Song>, clickedIndex: Int): Pair<List<MediaItem>, Int>? {
         val clicked = songs.getOrNull(clickedIndex) ?: return null
@@ -669,19 +746,25 @@ class Pa2MediaLibraryService : MediaLibraryService() {
     }
 
     private fun findSong(songId: String): Song? {
-        musicFetcher.albumSongsMapFlow.value.values.forEach { songs ->
-            songs.find { it.id == songId || it.mediaId == songId }?.let { return it }
+        albumSongsMapFlow.value.values.forEach { songs ->
+            songs.find { song -> song.id == songId || song.mediaId == songId }?.let { return it }
         }
-        musicFetcher.playlistSongsMapFlow.value.values.forEach { songs ->
-            songs.find { it.id == songId || it.mediaId == songId }?.let { return it }
+        playlistSongsMapFlow.value.values.forEach { songs ->
+            songs.find { song -> song.id == songId || song.mediaId == songId }?.let { return it }
         }
-        musicFetcher.currentQueueFlow.value.find { it.id == songId || it.mediaId == songId }?.let {
+        queueStateFlow().value.find { song -> song.id == songId || song.mediaId == songId }?.let {
             return it
         }
         return null
     }
 
+    fun getAlbumFromId(albumId: String): Album? =
+        albumSongsMapFlow.value.entries.find { album -> album.key.id == albumId }?.key
+
+    fun getSongsFromAlbum(albumId: String): List<Song> = albumSongsMapFlow.value.entries
+        .find { album -> album.key.id == albumId }?.value ?: emptyList()
+
     companion object {
-        private const val FETCH_TIMEOUT_MS = 8_000L
+        private const val FETCH_TIMEOUT_MS = 66_600L
     }
 }
