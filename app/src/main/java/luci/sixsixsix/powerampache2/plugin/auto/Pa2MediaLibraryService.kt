@@ -37,6 +37,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNot
@@ -150,7 +151,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
     private fun subscribeToLibraryChanges() {
         val session = librarySession ?: return
         serviceScope.launch {
-            playlistsStateFlow().collect {
+            playlistsStateFlow().collectLatest {
                 withContext(Dispatchers.Main) {
                     session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
                     session.notifyChildrenChanged(MediaIds.SECTION_PLAYLISTS, 0, null)
@@ -158,7 +159,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             }
         }
         serviceScope.launch {
-            favouriteAlbumStateFlow().collect {
+            favouriteAlbumStateFlow().collectLatest {
                 withContext(Dispatchers.Main) {
                     session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
                     session.notifyChildrenChanged(MediaIds.SECTION_FAVOURITE_ALBUMS, 0, null)
@@ -166,7 +167,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             }
         }
         serviceScope.launch {
-            recentAlbumsStateFlow().collect {
+            recentAlbumsStateFlow().collectLatest {
                 withContext(Dispatchers.Main) {
                     session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
                     session.notifyChildrenChanged(MediaIds.SECTION_RECENT_ALBUMS, 0, null)
@@ -174,7 +175,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             }
         }
         serviceScope.launch {
-            latestAlbumsStateFlow().collect {
+            latestAlbumsStateFlow().collectLatest {
                 withContext(Dispatchers.Main) {
                     session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
                     session.notifyChildrenChanged(MediaIds.SECTION_LATEST_ALBUMS, 0, null)
@@ -182,7 +183,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             }
         }
         serviceScope.launch {
-            highestAlbumsStateFlow().collect {
+            highestAlbumsStateFlow().collectLatest {
                 withContext(Dispatchers.Main) {
                     session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
                     session.notifyChildrenChanged(MediaIds.SECTION_HIGHEST_RATED_ALBUMS, 0, null)
@@ -191,7 +192,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         }
 
         serviceScope.launch {
-            playlistsStateFlow().collect { playlists ->
+            playlistsStateFlow().collectLatest { playlists ->
                 playlists.map { pl -> pl.id }.forEach { pid ->
                     // Ensure the operation of notifying children happens on the correct thread
                     withContext(Dispatchers.Main) {
@@ -203,7 +204,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         }
 
         serviceScope.launch {
-            getAlbumsUseCase().collect { albums ->
+            getAlbumsUseCase().collectLatest { albums ->
                 albums.map { album -> album.id }.forEach { aid ->
                     // Ensure the operation of notifying children happens on the correct thread
                     withContext(Dispatchers.Main) {
@@ -214,7 +215,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             }
         }
 //        mainScope.launch {
-//            musicFetcher.albumSongsMapFlow.collect {
+//            musicFetcher.albumSongsMapFlow.collectLatest {
 //                it.keys.forEach { aid ->
 //                    session.notifyChildrenChanged(MediaIds.album(aid), 0, null)
 //                }
@@ -642,7 +643,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
      */
     private fun subscribeToHostQueueMirror() {
         serviceScope.launch {
-            queueStateFlow().collect { queue ->
+            queueStateFlow().collectLatest { queue ->
                 withContext(Dispatchers.Main) {
                     syncPlayerFromHostQueue(queue)
                 }
