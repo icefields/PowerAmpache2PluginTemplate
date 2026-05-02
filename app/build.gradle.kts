@@ -73,6 +73,9 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.androidx.concurrent.futures)
 
+    testImplementation(libs.junit)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.test.runner)
 }
