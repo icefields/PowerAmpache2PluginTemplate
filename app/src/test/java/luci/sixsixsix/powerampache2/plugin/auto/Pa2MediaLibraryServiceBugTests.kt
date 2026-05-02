@@ -231,43 +231,38 @@ class Pa2MediaLibraryServiceBugTests {
     // -----------------------------------------------------------------------
 
     @Test
-    fun bug4_timeoutTooLong_currentValueIs66600ms() {
-        // Document the current timeout constant
-        val currentTimeout = 66_600L
+    fun bug4_timeoutWasReducedFromOriginal() {
+        val originalBuggyTimeout = 66_600L
         assertTrue(
-            "Bug 4: timeout is ${currentTimeout}ms (>60s) — far too long for a car UI",
-            currentTimeout > 60_000L
+            "FETCH_TIMEOUT_MS should be less than the original 66.6s",
+            Pa2MediaLibraryService.FETCH_TIMEOUT_MS < originalBuggyTimeout
         )
     }
 
     @Test
     fun bug4_emptyFlowHangsUntilTimeout() = runTest {
-        // Reproduce the drill-down flow pattern from lines 585-591
         val songsFlow = MutableStateFlow<List<Song>>(emptyList())
 
-        val shortTimeout = 500L // use a short timeout for the test
+        val shortTimeout = 500L
         val result = withTimeoutOrNull(shortTimeout) {
             songsFlow
                 .filterNotNull()
-                .filterNot { it.isEmpty() }  // blocks forever on empty
+                .filterNot { it.isEmpty() }
                 .first()
         }
 
         assertTrue(
-            "Bug 4: result is null because the flow never emits non-empty",
+            "Result is null because the flow never emits non-empty",
             result == null
         )
     }
 
     @Test
-    fun bug4_afterFix_timeoutShouldBeReasonable() {
-        // A car UI should not freeze for more than ~5-10 seconds
+    fun bug4_afterFix_timeoutIsReasonableForCarUI() {
         val recommendedMaxTimeout = 10_000L
-        val currentTimeout = 66_600L
-
         assertTrue(
-            "After fix, timeout should be <= ${recommendedMaxTimeout}ms, currently ${currentTimeout}ms",
-            currentTimeout > recommendedMaxTimeout // this assertion documents the bug
+            "FETCH_TIMEOUT_MS (${Pa2MediaLibraryService.FETCH_TIMEOUT_MS}ms) should be <= ${recommendedMaxTimeout}ms",
+            Pa2MediaLibraryService.FETCH_TIMEOUT_MS <= recommendedMaxTimeout
         )
     }
 

@@ -36,7 +36,9 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -44,6 +46,7 @@ import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -73,13 +76,9 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class Pa2MediaLibraryService : MediaLibraryService() {
 
-    /** ExoPlayer + MediaLibrarySession must run on the main thread; [serviceScope] is IO. */
-    //private val mainScopeJob = SupervisorJob()
-    // private val mainScope = CoroutineScope(mainScopeJob + Dispatchers.Main)
     private val serviceScopeJob = SupervisorJob()
     private val serviceScope: CoroutineScope = CoroutineScope(Dispatchers.IO + serviceScopeJob)
 
-    // USE CASES
     @Inject lateinit var playlistsStateFlow: PlaylistsStateFlow
     @Inject lateinit var favouriteAlbumStateFlow: FavouriteAlbumStateFlow
     @Inject lateinit var getAlbumsFromArtistUseCase: GetAlbumsFromArtistUseCase
@@ -92,31 +91,19 @@ class Pa2MediaLibraryService : MediaLibraryService() {
     @Inject lateinit var latestAlbumsStateFlow: LatestAlbumsStateFlow
     @Inject lateinit var queueStateFlow: QueueStateFlow
 
-    val playlistSongsMapFlow = playlistsStateFlow()
-        .filterNotNull()
-        .distinctUntilChanged()
-        .flatMapLatest { playlists ->
-            combine(playlists.map { playlist ->
-                getSongsFromPlaylistUseCase(playlist.id).map { songs -> playlist to songs }
-            }) { results -> results.associate { (pl, songs) -> pl to songs } }
-        }.stateIn(
-            scope = serviceScope,
-            started = SharingStarted.Eagerly,
-            initialValue = emptyMap()
-        )
-
-    val albumSongsMapFlow = getAlbumsUseCase()
-        .filterNotNull()
-        .distinctUntilChanged()
-        .flatMapLatest { albums ->
-            combine(albums.map { album ->
-                getSongsFromAlbumUseCase(album.id).map { songs -> album to songs }
-            }) { results -> results.associate { (al, songs) -> al to songs } }
-        }.stateIn(
-            scope = serviceScope,
-            started = SharingStarted.Eagerly,
-            initialValue = emptyMap()
-        )
+    /**
+     * Derived song maps — initialised lazily in [onCreate] AFTER Hilt has injected use cases.
+     *
+     * Fix for Bug 1: moved from field initializers (which run during the constructor, before
+     * Hilt injection) to lateinit vars populated in [initDerivedFlows].
+     *
+     * Fix for Bug 2: [safeCombine] guards against [combine] receiving an empty list of flows
+     * (which throws [IllegalArgumentException] / produces an immediately-completing flow).
+     */
+    lateinit var playlistSongsMapFlow: StateFlow<Map<Playlist, List<Song>>>
+        private set
+    lateinit var albumSongsMapFlow: StateFlow<Map<Album, List<Song>>>
+        private set
 
     private var player: ExoPlayer? = null
     private var librarySession: MediaLibrarySession? = null
@@ -136,8 +123,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
     @UnstableApi
     override fun onCreate() {
         super.onCreate()
-        // Host binds to this service to push library data; without it [MusicFetcher.musicFetcherListener]
-        // stays unset when the user opens Android Auto before the host has started the fetch service.
+        initDerivedFlows()
         val fetchIntent = Intent(this, PA2DataFetchService::class.java)
         startService(fetchIntent)
         dataFetchBound = bindService(fetchIntent, dataFetchConnection, Context.BIND_AUTO_CREATE)
@@ -148,56 +134,87 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         subscribeToHostQueueMirror()
     }
 
+    /**
+     * Initialise derived [StateFlow]s AFTER Hilt injection (in [onCreate], not the constructor).
+     * Fixes Bug 1 (field initializers accessing uninjected lateinit vars) and
+     * Bug 2 ([combine] with empty flows list) via [safeCombine].
+     */
+    private fun initDerivedFlows() {
+        playlistSongsMapFlow = playlistsStateFlow()
+            .filterNotNull()
+            .distinctUntilChanged()
+            .flatMapLatest { playlists ->
+                if (playlists.isEmpty()) {
+                    flowOf(emptyMap())
+                } else {
+                    combine(playlists.map { playlist ->
+                        getSongsFromPlaylistUseCase(playlist.id).map { songs -> playlist to songs }
+                    }) { results -> results.associate { (pl, songs) -> pl to songs } }
+                }
+            }.stateIn(
+                scope = serviceScope,
+                started = SharingStarted.Eagerly,
+                initialValue = emptyMap()
+            )
+
+        albumSongsMapFlow = getAlbumsUseCase()
+            .filterNotNull()
+            .distinctUntilChanged()
+            .flatMapLatest { albums ->
+                if (albums.isEmpty()) {
+                    flowOf(emptyMap())
+                } else {
+                    combine(albums.map { album ->
+                        getSongsFromAlbumUseCase(album.id).map { songs -> album to songs }
+                    }) { results -> results.associate { (al, songs) -> al to songs } }
+                }
+            }.stateIn(
+                scope = serviceScope,
+                started = SharingStarted.Eagerly,
+                initialValue = emptyMap()
+            )
+    }
+
+    /**
+     * Subscribe to library changes and notify Android Auto when data arrives.
+     *
+     * Fix for Bug 7: section flows are combined into a single coroutine so
+     * [MediaIds.ROOT] is notified once per batch instead of 5 times.
+     */
     private fun subscribeToLibraryChanges() {
         val session = librarySession ?: return
+
         serviceScope.launch {
-            playlistsStateFlow().collectLatest {
+            combine(
+                playlistsStateFlow(),
+                favouriteAlbumStateFlow(),
+                recentAlbumsStateFlow(),
+                latestAlbumsStateFlow(),
+                highestAlbumsStateFlow()
+            ) { playlists, favourites, recent, latest, highest ->
+                SectionSnapshot(playlists, favourites, recent, latest, highest)
+            }.collectLatest { snapshot ->
                 withContext(Dispatchers.Main) {
                     session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
-                    session.notifyChildrenChanged(MediaIds.SECTION_PLAYLISTS, 0, null)
-                }
-            }
-        }
-        serviceScope.launch {
-            favouriteAlbumStateFlow().collectLatest {
-                withContext(Dispatchers.Main) {
-                    session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
-                    session.notifyChildrenChanged(MediaIds.SECTION_FAVOURITE_ALBUMS, 0, null)
-                }
-            }
-        }
-        serviceScope.launch {
-            recentAlbumsStateFlow().collectLatest {
-                withContext(Dispatchers.Main) {
-                    session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
-                    session.notifyChildrenChanged(MediaIds.SECTION_RECENT_ALBUMS, 0, null)
-                }
-            }
-        }
-        serviceScope.launch {
-            latestAlbumsStateFlow().collectLatest {
-                withContext(Dispatchers.Main) {
-                    session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
-                    session.notifyChildrenChanged(MediaIds.SECTION_LATEST_ALBUMS, 0, null)
-                }
-            }
-        }
-        serviceScope.launch {
-            highestAlbumsStateFlow().collectLatest {
-                withContext(Dispatchers.Main) {
-                    session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
-                    session.notifyChildrenChanged(MediaIds.SECTION_HIGHEST_RATED_ALBUMS, 0, null)
+                    if (snapshot.playlists.isNotEmpty())
+                        session.notifyChildrenChanged(MediaIds.SECTION_PLAYLISTS, 0, null)
+                    if (snapshot.favourites.isNotEmpty())
+                        session.notifyChildrenChanged(MediaIds.SECTION_FAVOURITE_ALBUMS, 0, null)
+                    if (snapshot.recent.isNotEmpty())
+                        session.notifyChildrenChanged(MediaIds.SECTION_RECENT_ALBUMS, 0, null)
+                    if (snapshot.latest.isNotEmpty())
+                        session.notifyChildrenChanged(MediaIds.SECTION_LATEST_ALBUMS, 0, null)
+                    if (snapshot.highest.isNotEmpty())
+                        session.notifyChildrenChanged(MediaIds.SECTION_HIGHEST_RATED_ALBUMS, 0, null)
                 }
             }
         }
 
         serviceScope.launch {
             playlistsStateFlow().collectLatest { playlists ->
-                playlists.map { pl -> pl.id }.forEach { pid ->
-                    // Ensure the operation of notifying children happens on the correct thread
-                    withContext(Dispatchers.Main) {
-                        // Notify about the change in media session, this needs to run on the main thread
-                        session.notifyChildrenChanged(MediaIds.playlist(pid), 0, null)
+                withContext(Dispatchers.Main) {
+                    playlists.forEach { pl ->
+                        session.notifyChildrenChanged(MediaIds.playlist(pl.id), 0, null)
                     }
                 }
             }
@@ -205,23 +222,22 @@ class Pa2MediaLibraryService : MediaLibraryService() {
 
         serviceScope.launch {
             getAlbumsUseCase().collectLatest { albums ->
-                albums.map { album -> album.id }.forEach { aid ->
-                    // Ensure the operation of notifying children happens on the correct thread
-                    withContext(Dispatchers.Main) {
-                        // Notify about the change in media session, this needs to run on the main thread
-                        session.notifyChildrenChanged(MediaIds.album(aid), 0, null)
+                withContext(Dispatchers.Main) {
+                    albums.forEach { album ->
+                        session.notifyChildrenChanged(MediaIds.album(album.id), 0, null)
                     }
                 }
             }
         }
-//        mainScope.launch {
-//            musicFetcher.albumSongsMapFlow.collectLatest {
-//                it.keys.forEach { aid ->
-//                    session.notifyChildrenChanged(MediaIds.album(aid), 0, null)
-//                }
-//            }
-//        }
     }
+
+    private data class SectionSnapshot(
+        val playlists: List<Playlist>,
+        val favourites: List<Album>,
+        val recent: List<Album>,
+        val latest: List<Album>,
+        val highest: List<Album>
+    )
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
         librarySession
@@ -571,7 +587,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 ?: inList(recentAlbumsStateFlow().value)
                 ?: inList(latestAlbumsStateFlow().value)
                 ?: inList(highestAlbumsStateFlow().value)
-                ?: inList(albumSongsMapFlow.value.keys.toList())
+                ?: albumSongsMapFlow.value.keys.find { it.id == albumId }
         }
 
         private fun playlistChildrenFuture(
@@ -759,12 +775,13 @@ class Pa2MediaLibraryService : MediaLibraryService() {
     }
 
     fun getAlbumFromId(albumId: String): Album? =
-        albumSongsMapFlow.value.entries.find { album -> album.key.id == albumId }?.key
+        albumSongsMapFlow.value.keys.find { it.id == albumId }
 
-    fun getSongsFromAlbum(albumId: String): List<Song> = albumSongsMapFlow.value.entries
-        .find { album -> album.key.id == albumId }?.value ?: emptyList()
+    fun getSongsFromAlbum(albumId: String): List<Song> =
+        albumSongsMapFlow.value.entries.find { it.key.id == albumId }?.value ?: emptyList()
 
     companion object {
-        private const val FETCH_TIMEOUT_MS = 66_600L
+        /** Timeout for drill-down into playlists/albums. Reduced from 66.6s (Bug 4). */
+        internal const val FETCH_TIMEOUT_MS = 8_000L
     }
 }
