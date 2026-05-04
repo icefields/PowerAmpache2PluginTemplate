@@ -1,85 +1,108 @@
 # Agents — Power Ampache 2 plugin template
 
-## Branch policy
+Single onboarding doc for **humans** and **autonomous agents** (Cursor, CI bots). Follow this file; do not maintain parallel prose elsewhere.
 
-- **`main`:** Tracks **`upstream/main`** only (`icefields/PowerAmpache2PluginTemplate`). It should be a **fresh pull from upstream** — no feature work, no agent commits, no extra commits on top. Sync with `git fetch upstream` and `git reset --hard upstream/main` (then push to `origin/main` as needed).
-- **Development:** All work happens on **`cursor-cloud/dev-main-4dc1`** (or other topic branches). That is the integration branch for this fork.
-- **Upstream Android Auto line:** To contribute Android Auto work **to the upstream repo** (e.g. base **`PluginAndroidAuto`** on `icefields/PowerAmpache2PluginTemplate`, when the maintainer agrees), follow **Contributing upstream (`PluginAndroidAuto`)** in [`START_HERE.md`](START_HERE.md) before opening a PR upstream.
+## Goals
 
-## Commit messages (required for agents)
+- **Android Auto that works** — browse and playback via Media3 (`Pa2MediaLibraryService`) verifiable on phone, DHU, or car—not “should work” from compile-only checks.
+- **Reliable host IPC** — library data flows through **`MusicFetcher`** only after the Power Ampache 2 host binds **`PA2DataFetchService`** and Messenger delivers JSON; the plugin does not replace that pipeline.
+- **Evidence-first** — `./gradlew` output + `adb logcat` when debugging; **screenshots/recordings** when claiming AA UI works (agents cannot see the user’s screen).
 
-On development branches, include the **current Git branch name** at the start of the **subject line** so history stays attributable after rebases, cherry-picks, or fast-forward merges.
+## Git
 
-**Format:** `<branch-name>: <short imperative summary>`
+- **`main`** tracks **`upstream/main`** only (`icefields/PowerAmpache2PluginTemplate`). No feature or agent commits there; sync with `git fetch upstream` + `git reset --hard upstream/main` when asked.
+- **Work on** **`cursor-cloud/dev-main-4dc1`** or **`cursor-cloud/<topic>`** branches.
+- **Commit subjects (dev branches):** **`<branch-name>: <short imperative summary>`** using the **full** output of `git branch --show-current`. Rebases rewrite hashes; the prefix preserves attribution.
 
-**Examples:**
+## Scope (default)
 
-- `cursor-cloud/dev-main-4dc1: Wire playlist songs through MusicFetcher`
+| In bounds | Out of bounds (unless maintainer explicitly expands scope) |
+| --- | --- |
+| **`app/`** — AA / Media3 / service / manifest / app tests / resources | **`domain/`**, **`data/`** (incl. **`PA2DataFetchService`**, **`MusicFetcher` / `MusicFetcherImpl`**, DTOs) |
+| **`PowerAmpache2Theme`** when the task allows UI/theme work | **`MainActivity`** launcher contract / “open host + finish” flow for routine AA tasks |
+| Coordinated changes **only** when assigned with a real host+plugin spec | Ad-hoc “IPC hardening”, “DTO keys”, **`START_STICKY`** tweaks, or protocol invention in shared layers |
 
-Use the exact branch from `git branch --show-current` (do not abbreviate). If the subject would be long, keep the branch prefix and shorten the summary; add detail in the body after a blank line.
+**History:** A batch of commits on **`cursor-cloud/dev-main-4dc1`** (~2026‑04‑12; subjects around IPC / DTO / “harden”) was **reverted** as misaligned. **Do not** recreate that pattern without maintainer direction.
 
-**Rationale:** After a rebase, commit hashes change; the branch prefix preserves which line of work produced the change.
+**Architecture:** Modules `domain`, `data`, `app`, `PowerAmpache2Theme` — respect Clean Architecture boundaries.
 
-## Repository
+## Android Auto — behavior agents must respect
 
-- **Modules:** `domain`, `data`, `app`, `PowerAmpache2Theme` — respect Clean Architecture boundaries unless the product owner expands scope.
+- **Browse tree:** **`Pa2MediaLibraryService`** — wire **only** through **`MusicFetcher`**. Stable IDs: **`MediaIds.kt`**. Host often must be opened (e.g. **`MainActivity`**) before lists populate.
+- **Library search:** **Not implemented** (backlog). The service strips library search commands on connect so controllers do not show a broken search UI (**`Pa2LibraryCallback`** KDoc). To ship search: implement callbacks, then stop removing those commands.
+- **Surfaces:** Google **“For You”** / recommendation widgets **≠** this repo’s **Media** browse tree—confirm repro scope before changing browse code.
+- **Now Playing / queue:** Depends on host pushing **`MusicFetcher.currentQueueFlow`** and session mirroring; stale metadata → verify host IPC and playback sync in **`app/`**, not by editing **`domain/`** / **`data/`** without scope.
 
-## Android Auto — browse tree and search (`Pa2MediaLibraryService`)
+## Build environment
 
-- **Library content** (playlists, album sections, tracks) flows through **`MusicFetcher`** only. The **Power Ampache 2 host** must bind to **`PA2DataFetchService`** and push data over the existing Messenger IPC; opening the host (e.g. via `MainActivity`) is often required before browse fills in. See comments in [`app/src/main/java/luci/sixsixsix/powerampache2/plugin/auto/Pa2MediaLibraryService.kt`](app/src/main/java/luci/sixsixsix/powerampache2/plugin/auto/Pa2MediaLibraryService.kt).
-- **Library search** (`onSearch` / `onGetSearchResult`) is **not implemented** (product **backlog** / future release). Media3’s defaults would return “not supported” if the search UI were offered. For **Android Auto / Automotive** controllers, **`Pa2MediaLibraryService`** removes **`COMMAND_CODE_LIBRARY_SEARCH`** and **`COMMAND_CODE_LIBRARY_GET_SEARCH_RESULT`** in **`onConnect`** so the head unit does not show a broken search entry point. To ship search later: implement those callbacks, then stop removing those commands (details in KDoc on `Pa2LibraryCallback` in the same file).
+- **`local.properties`** → **`sdk.dir=...`** (gitignored). Align `sdk.dir` with the machine’s Android Studio SDK (common macOS path: `~/Library/Android/sdk`).
+- **JDK:** Prefer **17 or 21** for Gradle. This repo’s **`gradlew`** may prefer a **project-local JDK 21** under **`.jdks/jdk-21*`** when present (`.jdks/` gitignored). **JDK 26+** Gradle daemons can throw **Java version parse errors**—do not claim `./gradlew` works without verifying JDK.
+- **Signing:** Installing **debug** over **release** may require **`adb uninstall`** (signature mismatch). Root **`*.apk`** is gitignored.
 
-## Android Auto / DHU — UI bug loop (human + Cursor)
+## Debugging and logcat
 
-Use this when the goal is to **inspect the Android Auto UI** (Desktop Head Unit or a car), **report bugs**, and have **Cursor fix code under `app/`** and **automate the reload cycle** on each iteration.
+Use **`adb logcat`** while reproducing. Useful filters (adjust as needed):
 
-### What the human does
+```bash
+adb logcat | grep -E 'Pa2Media|MediaLibrary|ExoPlayer|MediaSession|AndroidRuntime'
+```
 
-1. **Inspect** the plugin in DHU (or the car): browse, playback, back stack, etc.
-2. **Report** the bug in chat: what you expected, what happened, screen or section if relevant. Optional: paste a short `adb logcat` snippet if the agent should confirm a crash or exception.
-3. **Wait** for the agent to run the iteration script (below), then **re-test** the same flow.
+Also filter by package **`luci.sixsixsix.powerampache2.plugin`** when isolating plugin-only noise.
 
-### What the agent must do after each fix (automate)
+## Startup (expect messy ordering until unified)
 
-Unless the human asked to skip a step, **run the full iteration** from the repo root so the phone and DHU are in a clean state:
+Several paths touch **`PA2DataFetchService`** (`PluginApplication`, **`Pa2MediaLibraryService`**, host **`register_client`**). **Cold repro:** `adb shell am force-stop luci.sixsixsix.powerampache2.plugin`, then vary **host first vs AA first** and inspect **`PA2DataFetch`**, **`MusicFetcherImpl`**, **`Pa2MediaLibraryService`** for `clientMessenger` / JSON flow.
+
+## Verification
+
+- **`./gradlew :app:assembleDebug`** (and **`installDebug`** when `adb` exists). No success claims without command output.
+- **Browse/session regressions:** **`./gradlew :app:connectedDebugAndroidTest`** when a device is available; update **`Pa2MediaLibraryInstrumentedTest`** if root structure or **`MediaIds`** change.
+- **Instrumented tests** validate **MediaBrowser API**, not DHU pixels — human DHU/car remains authoritative for “looks right.”
+
+## DHU / install iteration
+
+After AA UI fixes (unless the human skips):
 
 ```bash
 ./scripts/dev-aa-ui-iteration.sh
+ANDROID_SERIAL=<serial> ./scripts/dev-aa-ui-iteration.sh   # multiple adb devices
 ```
 
-If **multiple** devices appear in `adb devices` (USB + wireless), set the **USB serial** so the install and `adb` commands target one device:
+**Options:** `INSTALL_ONLY=1` or `NO_DHU=1` — skip DHU stop/start; `NO_MAIN=1` — skip **`MainActivity`** after force-stop.
+
+**DHU install:** Android SDK **`extras;google;auto`** (`sdkmanager`). **USB AOAP (recommended for DHU 2.x):** **`scripts/run-dhu-usb.sh`** — set **`ANDROID_SERIAL`** if multiple devices; **`DHU_BACKGROUND=1`** for detached run (Linux may use **`systemd-run --user --scope`** inside the script when available). **Linux/Wayland:** script may set **`SDL_VIDEODRIVER=x11`**; **`libc++`** needed on some distros. **Fallback:** on phone enable Android Auto **Developer → Start head unit server**, then:
 
 ```bash
-ANDROID_SERIAL=<serial-from-adb-devices> ./scripts/dev-aa-ui-iteration.sh
+adb forward tcp:5277 tcp:5277
+./scripts/run-dhu-adb-tunnel.sh
 ```
 
-The script, in order:
+**macOS:** system **`bash` is 3.2** — run DHU scripts with **`bash ./scripts/run-dhu-usb.sh`** if `./scripts/...` fails; USB TLS failures may require the **tunnel** path above.
 
-1. **Stops** any running `desktop-head-unit` (closes old DHU).
-2. **Builds and installs** `./gradlew :app:installDebug` (respects `ANDROID_SERIAL` when set).
-3. **Force-stops** the plugin package (`luci.sixsixsix.powerampache2.plugin`) so old processes and services are cleared.
-4. **Starts** `MainActivity` once (opens the Power Ampache 2 host when installed; the activity may finish immediately — that is expected).
-5. **Starts DHU again** in the background (`scripts/run-dhu-usb.sh` with `DHU_BACKGROUND=1`).
+## Projects and PRs
 
-**Scope:** implement fixes **only in `app/`** unless the product owner expands scope.
+- Agents **cannot** manage GitHub Projects from the repo. Maintainer board: [Project #7](https://github.com/users/shahzebqazi/projects/7). Draft cards: **`./scripts/create-project-7-android-auto-cards.sh`** (requires **`gh`** with **`project`** scopes). Link assigned issue/card URLs in PRs; **do not block** on missing cards—state assumptions in the PR.
 
-**Options:**
+### Guideline-alignment work (when a card or issue is assigned)
 
-- `INSTALL_ONLY=1` or `NO_DHU=1` — install + reset app; **do not** restart DHU (use when DHU is already fine or only the APK changed).
-- `NO_MAIN=1` — skip launching `MainActivity` after force-stop (use if the host is already open and you want to avoid a duplicate launch).
+1. **Review** [Android for Cars — media](https://developer.android.com/training/cars/media), [Content hierarchy](https://developer.android.com/training/cars/media/create-media-browser/content-hierarchy), [Design for Driving — media](https://developers.google.com/cars/design/create-apps/media-apps/overview). Cite what drove each change in the PR.
+2. **Default scope:** **`app/`** only (`Pa2MediaLibraryService`, **`MediaIds`**, manifest, tests, resources). No **`domain/`** / **`data/`** / **`MainActivity`** launcher changes unless the card or maintainer expands scope.
+3. **Verify:** **`./gradlew :app:assembleDebug`**; if browse/session changed, **`./gradlew :app:connectedDebugAndroidTest`** when possible.
+4. **PR:** Link issue/card URL; list **automated** vs **human DHU/car** verification; attach **logcat** + **screenshots** for AA-facing changes when possible.
+5. **Do not block** on the board—implement when asked; note if a card should be added to Project #7.
 
-**If you cannot use USB AOAP** (DHU over USB accessory): use the **ADB tunnel** path documented in [`START_HERE.md`](START_HERE.md) (`scripts/run-dhu-adb-tunnel.sh` after “Start head unit server” on the phone). The iteration script is **USB DHU**-oriented; tunnel users may run `installDebug` + force-stop manually and restart DHU with the tunnel script.
+## Contributing upstream (`PluginAndroidAuto`)
 
-### Evidence
+One-off PRs to **`icefields/PowerAmpache2PluginTemplate`**:
 
-- **Build:** `./gradlew :app:installDebug` must succeed.
-- **Runtime:** `adb logcat` with filters from [`START_HERE.md`](START_HERE.md) when diagnosing crashes or empty browse trees.
+| Topic | Policy |
+| --- | --- |
+| **Base branch** | **Confirm with upstream maintainer** (`PluginAndroidAuto`, **`main`**, or other) before rebasing—do not assume **`PluginAndroidAuto`** exists. |
+| **Contributor branch** | Prefer **`cursor-cloud/<name>-PluginAndroidAuto-<topic>-<id>`** (or maintainer naming). |
+| **`domain/` / `data/`** | **No** changes unless **explicitly approved** for that contribution. Default: **`app/`** only. |
+| **Shape** | **`git fetch upstream`**; small branch off agreed base; **`./gradlew :app:assembleDebug`** (and tests upstream expects); PR body lists **`app/`** vs shared layers and cites approval if shared layers change. |
+| **Host / IPC** | Plugin depends on host **`PA2DataFetchService`**—state what you verified in the PR. |
 
-## Product status and agent loop (this fork)
+## Upstream vs this fork
 
-- **Startup and lifecycle** are not fully predictable yet: multiple entry points (`PluginApplication`, `MainActivity`, `Pa2MediaLibraryService`) can start `PA2DataFetchService`, and interaction with **previously running** processes or task stacks can make behavior feel inconsistent until mapped with logcat. See **Known issues and startup** in [`START_HERE.md`](START_HERE.md).
-- **Android Auto (USB)** can list the plugin and browse in some flows, but **Google’s “For You” / recommendation-style surfaces** are not the same as this app’s **Media** browse tree (`Pa2MediaLibraryService`). If those widgets do not load or play tracks, distinguish **platform “For You”** (may require separate integration) from **in-app browse** under the plugin’s library root.
-- **Perpetual coding agents** should treat **functional Android Auto + reliable host IPC** as the current priority: reproduce on device, fix with evidence (`./gradlew` + `adb logcat`), document what changed, and repeat until the UI is **operational and intentional** — not “should work.”
-- **Kanban / GitHub Projects:** Agents cannot create or update project boards from this repo. The human maintains the [project board](https://github.com/users/shahzebqazi/projects/7) (or linked issue URLs); agents reference those links in PRs and use PR descriptions as the execution record. **Android Auto guideline alignment:** copy-paste **Kanban cards** and **agent instructions** live under **“Kanban: Android Auto guidelines alignment (Project #7)”** in [`START_HERE.md`](START_HERE.md).
-
-Onboarding detail, log filters, and **what is intentionally not implemented** (e.g. launcher `MainActivity` UI): see [`START_HERE.md`](START_HERE.md).
+This fork integrates on **`cursor-cloud/dev-main-4dc1`**. **`main`** stays a clean mirror of **`upstream/main`**.
