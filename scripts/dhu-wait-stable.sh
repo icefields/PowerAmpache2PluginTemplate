@@ -40,26 +40,34 @@ _notify() {
   printf '\n*** %s ***\n%s\n' "$summary" "$body"
 }
 
-if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+# macOS DHU is Cocoa-based; DISPLAY is unset there (still fine). Only require X/Wayland on Linux.
+if [[ "$(uname -s)" != Darwin ]] && [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
   echo "error: DISPLAY and WAYLAND_DISPLAY unset — run from a graphical session." >&2
   exit 1
 fi
 
 if [[ -z "${ANDROID_HOME:-}" ]]; then
   if [[ -f "$REPO_ROOT/local.properties" ]]; then
-    _sdk="$(awk -F= '/^\s*sdk\.dir=/{gsub(/\r/,""); sub(/^\s+/,"",$2); print $2; exit}' "$REPO_ROOT/local.properties")"
+    _sdk="$(awk -F= '/^[[:space:]]*sdk\.dir=/{gsub(/\r/,""); sub(/^[[:space:]]+/,"",$2); print $2; exit}' "$REPO_ROOT/local.properties")"
     if [[ -n "$_sdk" && -x "$_sdk/extras/google/auto/desktop-head-unit" ]]; then
       export ANDROID_HOME="$_sdk"
       echo "Using sdk.dir from local.properties: ANDROID_HOME=$ANDROID_HOME"
     fi
   fi
 fi
+# Auto-detect canonical SDK locations: macOS first (Library/Android/sdk), then Linux (Android/Sdk).
+if [[ -z "${ANDROID_HOME:-}" && -x "${HOME}/Library/Android/sdk/extras/google/auto/desktop-head-unit" ]]; then
+  export ANDROID_HOME="${HOME}/Library/Android/sdk"
+  echo "Using ANDROID_HOME=$ANDROID_HOME (default macOS SDK path with DHU installed)"
+fi
 if [[ -z "${ANDROID_HOME:-}" && -x "${HOME}/Android/Sdk/extras/google/auto/desktop-head-unit" ]]; then
   export ANDROID_HOME="${HOME}/Android/Sdk"
-  echo "Using ANDROID_HOME=$ANDROID_HOME (default SDK path with DHU installed)"
+  echo "Using ANDROID_HOME=$ANDROID_HOME (default Linux SDK path with DHU installed)"
 fi
 if [[ -z "${ANDROID_HOME:-}" ]]; then
   echo "error: ANDROID_HOME unset — install DHU (sdkmanager \"extras;google;auto\") or export ANDROID_HOME." >&2
+  echo "  macOS default: \$HOME/Library/Android/sdk" >&2
+  echo "  Linux default: \$HOME/Android/Sdk" >&2
   exit 1
 fi
 
@@ -119,7 +127,11 @@ for ((elapsed = 0; elapsed < MAX_WAIT_FIRST_SIGHT + STABLE_SECONDS + 60; elapsed
         echo "--- tail $DHU_LOG ---" >&2
         tail -40 "$DHU_LOG" >&2 || true
       fi
-      echo "Hint: journalctl --user -f  (if started via systemd-run)" >&2
+      if [[ "$(uname -s)" == Darwin ]]; then
+        echo "Hint: tail -f $DHU_LOG" >&2
+      else
+        echo "Hint: tail -f $DHU_LOG  (or journalctl --user -f if started via systemd-run)" >&2
+      fi
       exit 1
     fi
   fi

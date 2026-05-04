@@ -11,14 +11,22 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-if ! adb devices | grep -q 'device$'; then
-  echo "error: no adb device in 'device' state; connect USB or start an emulator" >&2
-  exit 1
+SERIAL="${ANDROID_SERIAL:-}"
+# When ANDROID_SERIAL is set, verify that specific device is in 'device' state — not just any device.
+if [[ -n "$SERIAL" ]]; then
+  if ! adb -s "$SERIAL" get-state 2>/dev/null | grep -q '^device$'; then
+    echo "error: ANDROID_SERIAL=$SERIAL is not in 'device' state; check 'adb devices' and accept USB debugging" >&2
+    exit 1
+  fi
+else
+  if ! adb devices | awk 'NR>1 && $2=="device"{found=1} END{exit !found}'; then
+    echo "error: no adb device in 'device' state; connect USB or start an emulator" >&2
+    exit 1
+  fi
 fi
 
 ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
 
-SERIAL="${ANDROID_SERIAL:-}"
 if [[ -n "$SERIAL" ]]; then
   adb -s "$SERIAL" install -r app/build/outputs/apk/debug/app-debug.apk
   adb -s "$SERIAL" install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk

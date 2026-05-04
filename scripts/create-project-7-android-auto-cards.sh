@@ -7,7 +7,7 @@
 #   2. Project must exist: https://github.com/users/shahzebqazi/projects/7
 #
 # Usage: from repo root, ./scripts/create-project-7-android-auto-cards.sh
-# Re-run is safe to avoid: it will add duplicate drafts unless you delete old ones in the UI.
+# Re-running is NOT idempotent: each run adds duplicate drafts. Delete old drafts in the UI before re-running.
 
 set -euo pipefail
 
@@ -44,7 +44,7 @@ Tasks:
 
 Out of scope unless agreed: changing domain/data or MainActivity launcher contract.
 
-Agent instructions: START_HERE.md → “Instructions for AI agents — Android Auto guideline alignment”.
+Agent instructions: AGENTS.md → “Guideline-alignment work”.
 EOF
 
 cat >"$TMP/2.md" <<'EOF'
@@ -57,7 +57,7 @@ Tasks:
 
 Scope: app/ only unless image URLs require data-layer fixes (then negotiate scope).
 
-Agent instructions: START_HERE.md → “Instructions for AI agents — Android Auto guideline alignment”.
+Agent instructions: AGENTS.md → “Guideline-alignment work”.
 EOF
 
 cat >"$TMP/3.md" <<'EOF'
@@ -70,7 +70,7 @@ Tasks:
 
 Scope: app/ preferred.
 
-Agent instructions: START_HERE.md → “Instructions for AI agents — Android Auto guideline alignment”.
+Agent instructions: AGENTS.md → “Guideline-alignment work”.
 EOF
 
 cat >"$TMP/4.md" <<'EOF'
@@ -83,7 +83,7 @@ Tasks:
 
 Scope: app/ only unless MusicFetcher contract must change.
 
-Agent instructions: START_HERE.md → “Instructions for AI agents — Android Auto guideline alignment”.
+Agent instructions: AGENTS.md → “Guideline-alignment work”.
 EOF
 
 cat >"$TMP/5.md" <<'EOF'
@@ -96,7 +96,7 @@ Tasks:
 
 Scope: app/ only.
 
-Agent instructions: START_HERE.md → “Instructions for AI agents — Android Auto guideline alignment”.
+Agent instructions: AGENTS.md → “Guideline-alignment work”.
 EOF
 
 cat >"$TMP/6.md" <<'EOF'
@@ -108,7 +108,7 @@ Tasks:
 
 Scope: app/ only.
 
-Agent instructions: START_HERE.md → “Instructions for AI agents — Android Auto guideline alignment”.
+Agent instructions: AGENTS.md → “Guideline-alignment work”.
 EOF
 
 create_card "Android Auto: Honor root hints (≤4 root tabs)" "$TMP/1.md"

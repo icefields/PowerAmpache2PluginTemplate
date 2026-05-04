@@ -14,7 +14,7 @@
 #   NO_DHU=1 ./scripts/dev-aa-ui-iteration.sh          # same as INSTALL_ONLY=1
 #   NO_MAIN=1 ./scripts/dev-aa-ui-iteration.sh         # do not am start MainActivity after force-stop
 #
-# Ref: scripts/run-dhu-usb.sh, START_HERE.md (DHU)
+# Ref: scripts/run-dhu-usb.sh, AGENTS.md (DHU)
 
 set -euo pipefail
 
@@ -25,24 +25,32 @@ PLUGIN_PKG="${PLUGIN_PKG:-luci.sixsixsix.powerampache2.plugin}"
 INSTALL_ONLY="${INSTALL_ONLY:-${NO_DHU:-0}}"
 NO_MAIN="${NO_MAIN:-0}"
 
-if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+# macOS: DHU is Cocoa-based; DISPLAY may be unset in IDE terminals — still fine for DHU.
+if [[ "$(uname -s)" != Darwin ]] && [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
   echo "error: DISPLAY and WAYLAND_DISPLAY are both unset (DHU needs a graphical session)." >&2
   exit 1
 fi
 
 if [[ -z "${ANDROID_HOME:-}" ]]; then
   if [[ -f "$REPO_ROOT/local.properties" ]]; then
-    _sdk="$(awk -F= '/^\s*sdk\.dir=/{gsub(/\r/,""); sub(/^\s+/,"",$2); print $2; exit}' "$REPO_ROOT/local.properties")"
+    # Use POSIX [[:space:]] — BSD awk on macOS does not understand \s.
+    _sdk="$(awk -F= '/^[[:space:]]*sdk\.dir=/{gsub(/\r/,""); sub(/^[[:space:]]+/,"",$2); print $2; exit}' "$REPO_ROOT/local.properties")"
     if [[ -n "$_sdk" ]]; then
       export ANDROID_HOME="$_sdk"
     fi
   fi
+fi
+# Auto-detect canonical SDK locations: macOS first (Library/Android/sdk), then Linux (Android/Sdk).
+if [[ -z "${ANDROID_HOME:-}" && -x "${HOME}/Library/Android/sdk/extras/google/auto/desktop-head-unit" ]]; then
+  export ANDROID_HOME="${HOME}/Library/Android/sdk"
 fi
 if [[ -z "${ANDROID_HOME:-}" && -x "${HOME}/Android/Sdk/extras/google/auto/desktop-head-unit" ]]; then
   export ANDROID_HOME="${HOME}/Android/Sdk"
 fi
 if [[ -z "${ANDROID_HOME:-}" ]]; then
   echo "error: ANDROID_HOME unset — set it or add sdk.dir to local.properties" >&2
+  echo "  macOS default: \$HOME/Library/Android/sdk" >&2
+  echo "  Linux default: \$HOME/Android/Sdk" >&2
   exit 1
 fi
 
@@ -97,4 +105,8 @@ export XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"
   DHU_BACKGROUND=1 ./scripts/run-dhu-usb.sh
 )
 
-echo "Done. DHU should be up; use Android Auto on the head unit to open the plugin. Logs: journalctl --user -n 80"
+if [[ "$(uname -s)" == Darwin ]]; then
+  echo "Done. DHU should be up; use Android Auto on the head unit to open the plugin. Logs: tail -f /tmp/dhu-run.log"
+else
+  echo "Done. DHU should be up; use Android Auto on the head unit to open the plugin. Logs: journalctl --user -n 80  (or tail -f /tmp/dhu-run.log if started via nohup)"
+fi

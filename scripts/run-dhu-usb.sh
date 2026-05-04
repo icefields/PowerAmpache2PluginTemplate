@@ -11,15 +11,24 @@
 
 set -euo pipefail
 
-# Need a graphical session for SDL. Pure SSH / agent shells often have no DISPLAY → DHU exits immediately.
-if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+# Need a graphical session for SDL on Linux/Wayland. macOS DHU uses Cocoa; DISPLAY is often unset there (still OK).
+if [[ "$(uname -s)" != Darwin ]] && [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
   echo "error: DISPLAY and WAYLAND_DISPLAY are both unset. DHU needs your desktop session (e.g. export DISPLAY=:0)." >&2
   exit 1
 fi
 
 if [[ -z "${ANDROID_HOME:-}" ]]; then
-  echo "error: ANDROID_HOME is not set (e.g. export ANDROID_HOME=\$HOME/Android/Sdk)" >&2
-  exit 1
+  # Auto-detect canonical SDK locations: macOS first, then Linux.
+  if [[ -x "${HOME}/Library/Android/sdk/extras/google/auto/desktop-head-unit" ]]; then
+    export ANDROID_HOME="${HOME}/Library/Android/sdk"
+  elif [[ -x "${HOME}/Android/Sdk/extras/google/auto/desktop-head-unit" ]]; then
+    export ANDROID_HOME="${HOME}/Android/Sdk"
+  else
+    echo "error: ANDROID_HOME is not set" >&2
+    echo "  macOS default: export ANDROID_HOME=\$HOME/Library/Android/sdk" >&2
+    echo "  Linux default: export ANDROID_HOME=\$HOME/Android/Sdk" >&2
+    exit 1
+  fi
 fi
 
 DHU="$ANDROID_HOME/extras/google/auto/desktop-head-unit"
@@ -28,10 +37,13 @@ if [[ ! -x "$DHU" ]]; then
   exit 1
 fi
 
-# libc++ must be on the loader path (pacman: libc++)
-if ! ldd "$DHU" 2>/dev/null | grep -q 'libc++.so.1 => /usr/lib'; then
-  if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
-    echo "warning: LD_LIBRARY_PATH is set; if DHU fails to start, run: unset LD_LIBRARY_PATH" >&2
+# libc++ loader-path check is Linux-specific (Arch packs libc++ separately; macOS has Apple's).
+# Skip on macOS where ldd is not available and the linker resolution is different.
+if [[ "$(uname -s)" != Darwin ]]; then
+  if ! ldd "$DHU" 2>/dev/null | grep -q 'libc++.so.1 => /usr/lib'; then
+    if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
+      echo "warning: LD_LIBRARY_PATH is set; if DHU fails to start, run: unset LD_LIBRARY_PATH" >&2
+    fi
   fi
 fi
 
@@ -53,7 +65,11 @@ elif [[ $# -ge 1 && "$1" != -* ]]; then
   shift
 fi
 
-mapfile -t _adb_devs < <(adb devices 2>/dev/null | awk '/\tdevice$/{print $1}' || true)
+# Portable without bash 4 mapfile (macOS ships bash 3.2).
+_adb_devs=()
+while IFS= read -r _dev; do
+  [[ -n "${_dev:-}" ]] && _adb_devs+=("$_dev")
+done < <(adb devices 2>/dev/null | awk '/\tdevice$/{print $1}' || true)
 if [[ -z "$_usb_serial" ]]; then
   if [[ ${#_adb_devs[@]} -eq 1 ]]; then
     _usb_serial="${_adb_devs[0]}"
@@ -85,10 +101,39 @@ if [[ -n "${DHU_BACKGROUND:-}" ]]; then
     exit 0
   fi
   echo "Starting DHU detached (log: $_log, pid file: $_pidf)..."
-  nohup "$DHU" --usb="${_usb_serial}" "$@" >>"$_log" 2>&1 &
-  echo $! >"$_pidf"
-  echo "DHU PID $(cat "$_pidf")"
+  # CRITICAL: DHU 2.0 has an interactive '> ' command prompt and exits if stdin
+  # closes (EOF). nohup with default stdin redirection closes stdin immediately,
+  # so DHU dies before TLS handshake can complete — even though USB AOAP and TLS
+  # would otherwise succeed. We hold stdin open by piping `tail -f /dev/null`
+  # into DHU; tail emits no data but keeps the read end of the pipe open
+  # indefinitely so DHU's prompt never sees EOF.
+  # Track DHU's actual pid (not the wrapper's) for cleanup. We launch DHU
+  # directly inside `bash -c` and capture its pid via `$!` of the wrapper, then
+  # discover the real DHU child through pgrep.
+  nohup bash -c 'tail -f /dev/null | "$@"' _ "$DHU" --usb="${_usb_serial}" "$@" >>"$_log" 2>&1 &
+  _wrapper_pid=$!
+  # Give DHU a moment to start so we can resolve its pid.
+  for _i in 1 2 3 4 5; do
+    sleep 1
+    _dhu_pid="$(pgrep -x desktop-head-unit 2>/dev/null | head -1 || true)"
+    if [[ -n "${_dhu_pid:-}" ]]; then break; fi
+  done
+  if [[ -n "${_dhu_pid:-}" ]]; then
+    echo "$_dhu_pid" >"$_pidf"
+  else
+    # Fall back to the wrapper pid; aa-logcat-slice and pkill -x will still work.
+    echo "$_wrapper_pid" >"$_pidf"
+  fi
+  echo "DHU PID $(cat "$_pidf")  (wrapper PID $_wrapper_pid)"
   exit 0
 fi
 
-exec "$DHU" --usb="${_usb_serial}" "$@"
+# Foreground path. If stdin is a real terminal, run DHU directly so the user
+# can type at DHU's interactive '> ' prompt (daynight, mic, etc.). If stdin
+# is not a terminal (CI, agent shells, IDE terminals with closed stdin),
+# apply the keep-alive wrapper so DHU does not exit on EOF.
+if [[ -t 0 ]] || [[ -n "${DHU_INTERACTIVE:-}" ]]; then
+  exec "$DHU" --usb="${_usb_serial}" "$@"
+else
+  exec bash -c 'tail -f /dev/null | "$@"' _ "$DHU" --usb="${_usb_serial}" "$@"
+fi
