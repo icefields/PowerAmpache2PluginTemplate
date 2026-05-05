@@ -35,7 +35,7 @@ import javax.inject.Inject
 class MainActivity : FragmentActivity(), BackPressHandler by BackPressHandlerImpl() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        //launchPowerAmpache2()
+        launchPowerAmpache2()
         handleOnBackPressed(this) // prevent the activity from being destroyed on back-press
 
         // uncomment for testing, viewModel contains a few examples to get data

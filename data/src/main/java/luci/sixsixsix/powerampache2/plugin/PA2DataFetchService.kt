@@ -152,6 +152,7 @@ class PA2DataFetchService : Service(), MusicFetcherListener {
             } catch (e: RemoteException) {
                 println("aaaa requestSongsForAlbum clientMessenger NULL RemoteException ${e.stackTraceToString()}")
                 clientMessenger = null
+                musicFetcher.messengerFlow.value = true
             }
         } ?: println("aaaa requestSongsForAlbum clientMessenger NULL")
     }
@@ -189,9 +190,9 @@ class PA2DataFetchService : Service(), MusicFetcherListener {
             try {
                 messenger.send(msg)
             } catch (e: RemoteException) {
-                musicFetcher.messengerFlow.value = true
                 println("aaaa requestSongsForPlaylist clientMessenger NULL RemoteException ${e.stackTraceToString()}")
-                //clientMessenger = null
+                clientMessenger = null
+                musicFetcher.messengerFlow.value = true
             }
         } ?: println("aaaa requestSongsForPlaylist clientMessenger NULL")
     }
