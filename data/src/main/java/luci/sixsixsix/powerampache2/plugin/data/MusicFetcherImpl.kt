@@ -90,4 +90,6 @@ class MusicFetcherImpl @Inject constructor(): MusicFetcher {
             albums.filter { it.artist.id == artistId }
         }.distinctUntilChanged()
     }
+
+    override val messengerFlow: MutableStateFlow<Boolean?> = MutableStateFlow(null)
 }

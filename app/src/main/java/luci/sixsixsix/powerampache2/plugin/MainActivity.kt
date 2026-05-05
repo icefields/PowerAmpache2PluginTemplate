@@ -21,7 +21,6 @@
  */
 package luci.sixsixsix.powerampache2.plugin
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.fragment.app.FragmentActivity
@@ -30,12 +29,13 @@ import luci.sixsixsix.powerampache2.plugin.presentation.SongListScreen
 import luci.sixsixsix.powerampache2.plugin.presentation.delegates.BackPressHandler
 import luci.sixsixsix.powerampache2.plugin.presentation.delegates.BackPressHandlerImpl
 import luci.sixsixsix.powerampache2.ui.theme.PowerAmpache2Theme
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity(), BackPressHandler by BackPressHandlerImpl() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        openPowerAmpache2()
+        //launchPowerAmpache2()
         handleOnBackPressed(this) // prevent the activity from being destroyed on back-press
 
         // uncomment for testing, viewModel contains a few examples to get data
@@ -56,12 +56,9 @@ class MainActivity : FragmentActivity(), BackPressHandler by BackPressHandlerImp
     /**
      * Launch another app by package name
      */
-    private fun openPowerAmpache2() {
+    private fun launchPowerAmpache2() {
         // TODO: add all possible package names
-        packageManager.getLaunchIntentForPackage("luci.sixsixsix.powerampache2.fdroid.debug")?.apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        }?.let { startActivity(it) }
-
+        openPowerAmpache2()
         finish()
     }
 }

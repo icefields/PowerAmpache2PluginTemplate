@@ -17,7 +17,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.net.Uri
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.widget.Toast
 import androidx.concurrent.futures.CallbackToFutureAdapter
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -36,18 +39,15 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,11 +66,12 @@ import luci.sixsixsix.powerampache2.plugin.domain.usecase.GetSongsFromAlbumUseCa
 import luci.sixsixsix.powerampache2.plugin.domain.usecase.GetSongsFromPlaylistUseCase
 import luci.sixsixsix.powerampache2.plugin.domain.usecase.HighestAlbumsStateFlow
 import luci.sixsixsix.powerampache2.plugin.domain.usecase.LatestAlbumsStateFlow
+import luci.sixsixsix.powerampache2.plugin.domain.usecase.MessengerFlow
 import luci.sixsixsix.powerampache2.plugin.domain.usecase.PlaylistsStateFlow
 import luci.sixsixsix.powerampache2.plugin.domain.usecase.QueueStateFlow
 import luci.sixsixsix.powerampache2.plugin.domain.usecase.RecentAlbumsStateFlow
+import luci.sixsixsix.powerampache2.plugin.openPowerAmpache2
 import java.util.Collections.emptyList
-import java.util.Collections.emptyMap
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -91,6 +92,9 @@ class Pa2MediaLibraryService : MediaLibraryService() {
     @Inject lateinit var latestAlbumsStateFlow: LatestAlbumsStateFlow
     @Inject lateinit var queueStateFlow: QueueStateFlow
 
+    @Inject lateinit var messengerFlow: MessengerFlow
+
+
     /**
      * Derived song maps — initialised lazily in [onCreate] AFTER Hilt has injected use cases.
      *
@@ -100,10 +104,18 @@ class Pa2MediaLibraryService : MediaLibraryService() {
      * Fix for Bug 2: [safeCombine] guards against [combine] receiving an empty list of flows
      * (which throws [IllegalArgumentException] / produces an immediately-completing flow).
      */
-    lateinit var playlistSongsMapFlow: StateFlow<Map<Playlist, List<Song>>>
+//    lateinit var playlistSongsMapFlow: StateFlow<Map<Playlist, List<Song>>>
+//        private set
+//    lateinit var albumSongsMapFlow: StateFlow<Map<Album, List<Song>>>
+//        private set
+
+    private val playlistSongsMap: MutableMap<String, List<Song>> = mutableMapOf()
+    private val albumSongsMap: MutableMap<String, List<Song>> = mutableMapOf()
+
+    lateinit var playlistsFlow: StateFlow<List<Playlist>>
         private set
-    lateinit var albumSongsMapFlow: StateFlow<Map<Album, List<Song>>>
-        private set
+
+    private val albumsCache: MutableMap<String, Album> = mutableMapOf()
 
     private var player: ExoPlayer? = null
     private var librarySession: MediaLibrarySession? = null
@@ -140,40 +152,61 @@ class Pa2MediaLibraryService : MediaLibraryService() {
      * Bug 2 ([combine] with empty flows list) via [safeCombine].
      */
     private fun initDerivedFlows() {
-        playlistSongsMapFlow = playlistsStateFlow()
+        playlistsFlow = playlistsStateFlow()
             .filterNotNull()
             .distinctUntilChanged()
-            .flatMapLatest { playlists ->
-                if (playlists.isEmpty()) {
-                    flowOf(emptyMap())
-                } else {
-                    combine(playlists.map { playlist ->
-                        getSongsFromPlaylistUseCase(playlist.id).map { songs -> playlist to songs }
-                    }) { results -> results.associate { (pl, songs) -> pl to songs } }
-                }
-            }.stateIn(
+            .stateIn(
                 scope = serviceScope,
                 started = SharingStarted.Eagerly,
-                initialValue = emptyMap()
+                initialValue = emptyList<Playlist>()
             )
 
-        albumSongsMapFlow = getAlbumsUseCase()
-            .filterNotNull()
-            .distinctUntilChanged()
-            .flatMapLatest { albums ->
-                if (albums.isEmpty()) {
-                    flowOf(emptyMap())
-                } else {
-                    combine(albums.map { album ->
-                        getSongsFromAlbumUseCase(album.id).map { songs -> album to songs }
-                    }) { results -> results.associate { (al, songs) -> al to songs } }
-                }
-            }.stateIn(
-                scope = serviceScope,
-                started = SharingStarted.Eagerly,
-                initialValue = emptyMap()
-            )
+        serviceScope.launch {
+            messengerFlow().filterNotNull().filter { it } .collectLatest {
+                println("aaaa messengerFlow $it")
+                // TODO service disconnected. notify user to restart pa2
+            }
+        }
+
+//        playlistSongsMapFlow = playlistsStateFlow()
+//            .filterNotNull()
+//            .distinctUntilChanged()
+//            .flatMapLatest { playlists ->
+//                if (playlists.isEmpty()) {
+//                    flowOf(emptyMap())
+//                } else {
+//                    combine(playlists.map { playlist ->
+//                        //todo:lucifer getSongsFromPlaylistUseCase(playlist.id).map { songs -> playlist to songs }
+//                        flow<List<Song>> { emptyList<Song>() }.map { songs -> playlist to songs }
+//                    }) { results -> results.associate { (pl, songs) -> pl to songs } }
+//                }
+//            }.stateIn(
+//                scope = serviceScope,
+//                started = SharingStarted.Eagerly,
+//                initialValue = emptyMap()
+//            )
+
+//        albumSongsMapFlow = getAlbumsUseCase()
+//            .filterNotNull()
+//            .distinctUntilChanged()
+//            .flatMapLatest { albums ->
+//                if (albums.isEmpty()) {
+//                    flowOf(emptyMap())
+//                } else {
+//                    combine(albums.map { album ->
+//                        //todo:lucifer getSongsFromAlbumUseCase(album.id).map { songs -> album to songs }
+//                        flow<List<Song>> { emptyList<Song>() }.map { songs -> album to songs }
+//                    }) { results -> results.associate { (al, songs) -> al to songs } }
+//                }
+//            }.stateIn(
+//                scope = serviceScope,
+//                started = SharingStarted.Eagerly,
+//                initialValue = emptyMap()
+//            )
     }
+
+    private fun addToAlbumCache(albums: List<Album>) = albums.forEach { album -> albumsCache[album.id] = album }
+
 
     /**
      * Subscribe to library changes and notify Android Auto when data arrives.
@@ -192,7 +225,13 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 latestAlbumsStateFlow(),
                 highestAlbumsStateFlow()
             ) { playlists, favourites, recent, latest, highest ->
-                SectionSnapshot(playlists, favourites, recent, latest, highest)
+                SectionSnapshot(playlists, favourites, recent, latest, highest).also {
+                    // add all fetched albums to cache
+                    addToAlbumCache(favourites)
+                    addToAlbumCache(recent)
+                    addToAlbumCache(latest)
+                    addToAlbumCache(highest)
+                }
             }.collectLatest { snapshot ->
                 withContext(Dispatchers.Main) {
                     session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
@@ -304,6 +343,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 MediaIds.ROOT,
                 getString(R.string.media_browse_root_title)
             )
+            Handler(Looper.getMainLooper()).post {
+                openPowerAmpache2()
+                Toast.makeText(applicationContext, "onGetLibraryRoot", Toast.LENGTH_SHORT).show()
+            }
             return Futures.immediateFuture(LibraryResult.ofItem(root, params))
         }
 
@@ -587,7 +630,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 ?: inList(recentAlbumsStateFlow().value)
                 ?: inList(latestAlbumsStateFlow().value)
                 ?: inList(highestAlbumsStateFlow().value)
-                ?: albumSongsMapFlow.value.keys.find { it.id == albumId }
+                ?: albumsCache[albumId]
         }
 
         private fun playlistChildrenFuture(
@@ -605,7 +648,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                                 .filterNot { it.isEmpty() }
                                 .first()
                         } ?: emptyList()
-                    }.getOrDefault(emptyList())
+                    }.getOrDefault(emptyList()).also {
+                        println("aaaa received ${it.size} songs for playlist $playlistId")
+                        playlistSongsMap[playlistId] = it
+                    }
                     val playable = songs.map { this@Pa2MediaLibraryService.songToPlayableMediaItem(it) }
                     val paged = sliceForPage(playable, page, pageSize)
                     completer.set(
@@ -634,7 +680,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                                 .filterNot { it.isEmpty() }
                                 .first()
                         } ?: emptyList()
-                    }.getOrDefault(emptyList())
+                    }.getOrDefault(emptyList()).also {
+                        println("aaaa received ${it.size} songs for album $albumId")
+                        albumSongsMap[albumId] = it
+                    }
                     val playable = songs.map { this@Pa2MediaLibraryService.songToPlayableMediaItem(it) }
                     val paged = sliceForPage(playable, page, pageSize)
                     completer.set(
@@ -710,13 +759,13 @@ class Pa2MediaLibraryService : MediaLibraryService() {
      * timeline has multiple windows. Rebuild the queue from the cached playlist/album song list.
      */
     private fun expandQueueForSong(songId: String): Pair<List<MediaItem>, Int>? {
-        for (songs in playlistSongsMapFlow.value.values) {
+        for (songs in playlistSongsMap.values) {
             val idx = songs.indexOfFirst { it.id == songId || it.mediaId == songId }
             if (idx >= 0) {
                 buildPlayableQueueWithStartIndex(songs, idx)?.let { return it }
             }
         }
-        for (songs in albumSongsMapFlow.value.values) {
+        for (songs in albumSongsMap.values) {
             val idx = songs.indexOfFirst { it.id == songId || it.mediaId == songId }
             if (idx >= 0) {
                 buildPlayableQueueWithStartIndex(songs, idx)?.let { return it }
@@ -762,10 +811,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
     }
 
     private fun findSong(songId: String): Song? {
-        albumSongsMapFlow.value.values.forEach { songs ->
+        albumSongsMap.values.forEach { songs ->
             songs.find { song -> song.id == songId || song.mediaId == songId }?.let { return it }
         }
-        playlistSongsMapFlow.value.values.forEach { songs ->
+        playlistSongsMap.values.forEach { songs ->
             songs.find { song -> song.id == songId || song.mediaId == songId }?.let { return it }
         }
         queueStateFlow().value.find { song -> song.id == songId || song.mediaId == songId }?.let {
@@ -774,14 +823,14 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         return null
     }
 
-    fun getAlbumFromId(albumId: String): Album? =
-        albumSongsMapFlow.value.keys.find { it.id == albumId }
+    fun getAlbumFromId(albumId: String): Album? = albumsCache[albumId]
+        //albumSongsMapFlow.value.keys.find { it.id == albumId }
 
-    fun getSongsFromAlbum(albumId: String): List<Song> =
-        albumSongsMapFlow.value.entries.find { it.key.id == albumId }?.value ?: emptyList()
+    fun getSongsFromAlbum(albumId: String): List<Song> = albumSongsMap[albumId] ?: emptyList()
+        //albumSongsMapFlow.value.entries.find { it.key.id == albumId }?.value ?: emptyList()
 
     companion object {
         /** Timeout for drill-down into playlists/albums. Reduced from 66.6s (Bug 4). */
-        internal const val FETCH_TIMEOUT_MS = 8_000L
+        internal const val FETCH_TIMEOUT_MS = 666_000L
     }
 }

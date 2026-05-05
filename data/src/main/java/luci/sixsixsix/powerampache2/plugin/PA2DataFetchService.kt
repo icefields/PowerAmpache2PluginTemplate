@@ -60,6 +60,7 @@ import luci.sixsixsix.powerampache2.plugin.domain.common.KEY_RESPONSE_SUCCESS
 import luci.sixsixsix.powerampache2.plugin.domain.model.Album
 import luci.sixsixsix.powerampache2.plugin.domain.model.Song
 import javax.inject.Inject
+import kotlin.io.println
 
 @AndroidEntryPoint
 class PA2DataFetchService : Service(), MusicFetcherListener {
@@ -149,9 +150,10 @@ class PA2DataFetchService : Service(), MusicFetcherListener {
             try {
                 messenger.send(msg)
             } catch (e: RemoteException) {
+                println("aaaa requestSongsForAlbum clientMessenger NULL RemoteException ${e.stackTraceToString()}")
                 clientMessenger = null
             }
-        }
+        } ?: println("aaaa requestSongsForAlbum clientMessenger NULL")
     }
 
     /**
@@ -187,9 +189,11 @@ class PA2DataFetchService : Service(), MusicFetcherListener {
             try {
                 messenger.send(msg)
             } catch (e: RemoteException) {
-                clientMessenger = null
+                musicFetcher.messengerFlow.value = true
+                println("aaaa requestSongsForPlaylist clientMessenger NULL RemoteException ${e.stackTraceToString()}")
+                //clientMessenger = null
             }
-        }
+        } ?: println("aaaa requestSongsForPlaylist clientMessenger NULL")
     }
 
     /** Album / playlist id from the host bundle ([KEY_ID], [KEY_ALBUM_ID], [KEY_PLAYLIST_ID] are all `"id"` today). */

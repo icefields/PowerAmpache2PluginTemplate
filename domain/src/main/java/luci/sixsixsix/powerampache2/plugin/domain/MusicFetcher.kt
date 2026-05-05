@@ -46,4 +46,6 @@ interface MusicFetcher {
     fun getSongsFromAlbum(albumId: String): Flow<List<Song>>
     fun getSongsFromPlaylist(playlistId: String): Flow<List<Song>>
     fun getAlbumsFromArtist(artistId: String): Flow<List<Album>>
+
+    val messengerFlow: MutableStateFlow<Boolean?>
 }
