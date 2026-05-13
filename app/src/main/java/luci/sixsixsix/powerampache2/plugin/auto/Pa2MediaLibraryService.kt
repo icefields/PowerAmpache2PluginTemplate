@@ -219,11 +219,11 @@ class Pa2MediaLibraryService : MediaLibraryService() {
 
         serviceScope.launch {
             combine(
-                playlistsStateFlow(),
-                favouriteAlbumStateFlow(),
-                recentAlbumsStateFlow(),
-                latestAlbumsStateFlow(),
-                highestAlbumsStateFlow()
+                playlistsStateFlow().filterNotNull().filterNot { it.isEmpty() },
+                favouriteAlbumStateFlow().filterNotNull().filterNot { it.isEmpty() },
+                recentAlbumsStateFlow().filterNotNull().filterNot { it.isEmpty() },
+                latestAlbumsStateFlow().filterNotNull().filterNot { it.isEmpty() },
+                highestAlbumsStateFlow().filterNotNull().filterNot { it.isEmpty() }
             ) { playlists, favourites, recent, latest, highest ->
                 SectionSnapshot(playlists, favourites, recent, latest, highest).also {
                     // add all fetched albums to cache
@@ -250,7 +250,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         }
 
         serviceScope.launch {
-            playlistsStateFlow().collectLatest { playlists ->
+            playlistsStateFlow().filterNotNull().filterNot { it.isEmpty() }.collectLatest { playlists ->
                 withContext(Dispatchers.Main) {
                     playlists.forEach { pl ->
                         session.notifyChildrenChanged(MediaIds.playlist(pl.id), 0, null)
@@ -344,8 +344,8 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 getString(R.string.media_browse_root_title)
             )
             Handler(Looper.getMainLooper()).post {
-                openPowerAmpache2()
-                Toast.makeText(applicationContext, "onGetLibraryRoot", Toast.LENGTH_SHORT).show()
+                //openPowerAmpache2()
+                //Toast.makeText(applicationContext, "onGetLibraryRoot", Toast.LENGTH_SHORT).show()
             }
             return Futures.immediateFuture(LibraryResult.ofItem(root, params))
         }

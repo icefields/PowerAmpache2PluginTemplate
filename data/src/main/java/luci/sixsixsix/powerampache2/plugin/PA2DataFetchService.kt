@@ -208,74 +208,94 @@ class PA2DataFetchService : Service(), MusicFetcherListener {
         when(action) {
             ACTION_PLAYLISTS -> gson.fromJson(jsonStr, PlaylistsDto::class.java).playlists.also { playlists ->
                 println("aaaa ACTION_PLAYLISTS ${playlists.size}")
-                musicFetcher.playlistsFlow.value = playlists
+                if (playlists.isNotEmpty()) {
+                    musicFetcher.playlistsFlow.value = playlists
+                }
             }
             ACTION_ARTISTS -> gson.fromJson(jsonStr, ArtistsDto::class.java).artists.also { artists ->
-                musicFetcher.artistsFlow.update { oldArtists ->
-                    val combined = (oldArtists + artists).distinct()
-                    println("aaaa parseJsonString ACTION_ARTISTS $entityId size ${combined.size}")
-                    combined
+                if (artists.isNotEmpty()) {
+                    musicFetcher.artistsFlow.update { oldArtists ->
+                        val combined = (oldArtists + artists).distinct()
+                        println("aaaa parseJsonString ACTION_ARTISTS $entityId size ${combined.size}")
+                        combined
+                    }
                 }
             }
             ACTION_ALBUMS -> gson.fromJson(jsonStr, AlbumsDto::class.java).albums.also { albums ->
-                musicFetcher.albumsFlow.update { oldAlbums ->
-                    val combined = (oldAlbums + albums).distinct()
-                    println("aaaa parseJsonString ACTION_ALBUMS $entityId size ${combined.size}")
-                    combined
+                if (albums.isNotEmpty()) {
+                    musicFetcher.albumsFlow.update { oldAlbums ->
+                        val combined = (oldAlbums + albums).distinct()
+                        println("aaaa parseJsonString ACTION_ALBUMS $entityId size ${combined.size}")
+                        combined
+                    }
                 }
             }
             ACTION_SONGS_ALBUM -> {
                 val id = entityId ?: return
                 gson.fromJson(jsonStr, SongsDto::class.java).songs.also { songs ->
-                    musicFetcher.albumSongsMapFlow.update { map ->
-                        (map + (id to songs))
+                    if (songs.isNotEmpty()) {
+                        musicFetcher.albumSongsMapFlow.update { map ->
+                            (map + (id to songs))
+                        }
                     }
                 }
             }
             ACTION_SONGS_PLAYLIST -> {
                 val id = entityId ?: return
                 gson.fromJson(jsonStr, SongsDto::class.java).songs.also { songs ->
-                    musicFetcher.playlistSongsMapFlow.update { map ->
-                        val newList: LinkedHashSet<Song> = LinkedHashSet(map[id] ?: emptyList())
-                        newList.addAll(songs)
-                        (map + (id to newList.toList()))
+                    if (songs.isNotEmpty()) {
+                        musicFetcher.playlistSongsMapFlow.update { map ->
+                            val newList: LinkedHashSet<Song> = LinkedHashSet(map[id] ?: emptyList())
+                            newList.addAll(songs)
+                            (map + (id to newList.toList()))
+                        }
                     }
                 }
             }
             "highest_albums" -> gson.fromJson(jsonStr, AlbumsDto::class.java).albums.also { albums ->
-                addToAlbumsList(albums)
-                musicFetcher.highRatedAlbumsFlow.update { oldAlbums ->
-                    val combined = (oldAlbums + albums).distinct()
-                    println("aaaa parseJsonString highest_albums $entityId size ${combined.size}")
-                    combined
+                if (albums.isNotEmpty()) {
+                    addToAlbumsList(albums)
+                    musicFetcher.highRatedAlbumsFlow.update { oldAlbums ->
+                        val combined = (oldAlbums + albums).distinct()
+                        println("aaaa parseJsonString highest_albums $entityId size ${combined.size}")
+                        combined
+                    }
                 }
             }
             "favourite_albums" -> gson.fromJson(jsonStr, AlbumsDto::class.java).albums.also { albums ->
-                addToAlbumsList(albums)
-                musicFetcher.favouriteAlbumsFlow.update { oldAlbums ->
-                    val combined = (oldAlbums + albums).distinct()
-                    println("aaaa favouriteAlbumsFlow $action $entityId size ${combined.size}")
-                    combined
+                if (albums.isNotEmpty()) {
+                    addToAlbumsList(albums)
+                    musicFetcher.favouriteAlbumsFlow.update { oldAlbums ->
+                        val combined = (oldAlbums + albums).distinct()
+                        println("aaaa favouriteAlbumsFlow $action $entityId size ${combined.size}")
+                        combined
+                    }
                 }
             }
             "recent_albums" -> gson.fromJson(jsonStr, AlbumsDto::class.java).albums.also { albums ->
-                addToAlbumsList(albums)
-                musicFetcher.recentAlbumsFlow.update { oldAlbums ->
-                    val combined = (oldAlbums + albums).distinct()
-                    println("aaaa recentAlbumsFlow $action $entityId size ${combined.size}")
-                    combined
+                if (albums.isNotEmpty()) {
+                    addToAlbumsList(albums)
+                    musicFetcher.recentAlbumsFlow.update { oldAlbums ->
+                        val combined = (oldAlbums + albums).distinct()
+                        println("aaaa recentAlbumsFlow $action $entityId size ${combined.size}")
+                        combined
+                    }
                 }
             }
             "latest_albums" -> gson.fromJson(jsonStr, AlbumsDto::class.java).albums.also { albums ->
-                addToAlbumsList(albums)
-                musicFetcher.latestAlbumsFlow.update { oldAlbums ->
-                    val combined = (oldAlbums + albums).distinct()
-                    println("aaaa latestAlbumsFlow $action $entityId size ${combined.size}")
-                    combined
+                if (albums.isNotEmpty()) {
+                    addToAlbumsList(albums)
+                    musicFetcher.latestAlbumsFlow.update { oldAlbums ->
+                        val combined = (oldAlbums + albums).distinct()
+                        println("aaaa latestAlbumsFlow $action $entityId size ${combined.size}")
+                        combined
+                    }
                 }
             }
             "queue" -> gson.fromJson(jsonStr, SongsDto::class.java).songs.also {
-                musicFetcher.currentQueueFlow.value = it
+                if (it.isNotEmpty()) {
+                    musicFetcher.currentQueueFlow.value = it
+                }
             }
         }
     }

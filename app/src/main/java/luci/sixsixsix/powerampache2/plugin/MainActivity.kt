@@ -23,6 +23,12 @@ package luci.sixsixsix.powerampache2.plugin
 
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import dagger.hilt.android.AndroidEntryPoint
 import luci.sixsixsix.powerampache2.plugin.presentation.SongListScreen
@@ -33,13 +39,47 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity(), BackPressHandler by BackPressHandlerImpl() {
+//    override fun onCreate(savedInstanceState: Bundle?) {
+//        super.onCreate(savedInstanceState)
+//        //launchPowerAmpache2()
+//        mainScreenContent()
+//        handleOnBackPressed(this) // prevent the activity from being destroyed on back-press
+//
+//        // uncomment for testing, viewModel contains a few examples to get data
+//        // testContent()
+//    }
+
+
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        //launchPowerAmpache2()
+        enableEdgeToEdge() // proper system bar handling
         handleOnBackPressed(this) // prevent the activity from being destroyed on back-press
+        setContent {
+            PowerAmpache2Theme(
+                darkTheme = true,
+                dynamicColor = false
+            ) {
+                MainScreen(
+                    onBackClick = {
+                        onBackPressedDispatcher.onBackPressed()
+                    //    handleOnBackPressed(this)
+                    }
+                )
+            }
+        }
+    }
 
-        // uncomment for testing, viewModel contains a few examples to get data
-        // testContent()
+    private fun mainScreenContent() {
+        setContent {
+            PowerAmpache2Theme(
+                darkTheme = true,
+                dynamicColor = false
+            ) {
+                MainScreen {  }
+            }
+        }
     }
 
     private fun testContent() {

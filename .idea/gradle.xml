@@ -9,11 +9,11 @@
         <option name="gradleJvm" value="#GRADLE_LOCAL_JAVA_HOME" />
         <option name="modules">
           <set>
-            <option value="/mnt/6402E00302DFD7DE/Code/Android/Willy/PowerAmpache2Auto" />
-            <option value="/mnt/6402E00302DFD7DE/Code/Android/Willy/PowerAmpache2Auto/PowerAmpache2Theme" />
-            <option value="/mnt/6402E00302DFD7DE/Code/Android/Willy/PowerAmpache2Auto/app" />
-            <option value="/mnt/6402E00302DFD7DE/Code/Android/Willy/PowerAmpache2Auto/data" />
-            <option value="/mnt/6402E00302DFD7DE/Code/Android/Willy/PowerAmpache2Auto/domain" />
+            <option value="$USER_HOME$/Code/Android/Willy/PowerAmpache2Auto" />
+            <option value="$USER_HOME$/Code/Android/Willy/PowerAmpache2Auto/PowerAmpache2Theme" />
+            <option value="$USER_HOME$/Code/Android/Willy/PowerAmpache2Auto/app" />
+            <option value="$USER_HOME$/Code/Android/Willy/PowerAmpache2Auto/data" />
+            <option value="$USER_HOME$/Code/Android/Willy/PowerAmpache2Auto/domain" />
           </set>
         </option>
       </GradleProjectSettings>
