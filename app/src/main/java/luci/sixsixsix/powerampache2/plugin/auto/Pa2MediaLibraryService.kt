@@ -394,10 +394,6 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                         )
                     }
                 }
-                MediaIds.NO_DATA -> immediateChildren(
-                    sliceForPage(noDataItems(), page, pageSize),
-                    params
-                )
                 MediaIds.SECTION_PLAYLISTS -> immediateChildren(
                     sliceForPage(
                         playlistsStateFlow().value
@@ -651,11 +647,12 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         private fun noDataItem(): MediaItem =
             MediaItem.Builder()
                 .setMediaId(MediaIds.NO_DATA)
+                .setUri("https://localhost/no-data")
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(getString(R.string.media_no_data_title))
-                        .setIsBrowsable(true)
-                        .setIsPlayable(false)
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
                         .build()
                 )
                 .build()
@@ -663,11 +660,12 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         private fun noDataInstructionsItem(): MediaItem =
             MediaItem.Builder()
                 .setMediaId(MediaIds.NO_DATA_INSTRUCTIONS)
+                .setUri("https://localhost/no-data")
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(getString(R.string.media_no_data_instructions))
                         .setIsBrowsable(false)
-                        .setIsPlayable(false)
+                        .setIsPlayable(true)
                         .build()
                 )
                 .build()
