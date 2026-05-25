@@ -400,7 +400,11 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_PLAYLISTS -> immediateChildren(
                     sliceForPage(
-                        playlistsStateFlow().value.map { playlistItem(it) },
+                        playlistsStateFlow().value
+                            .sortedWith(compareByDescending<Playlist> { it.flag }
+                                .thenByDescending { it.rating }
+                                .thenByDescending { it.averageRating })
+                            .map { playlistItem(it) },
                         page,
                         pageSize
                     ),
@@ -408,7 +412,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_FAVOURITE_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        favouriteAlbumStateFlow().value.map { albumItem(it) },
+                        favouriteAlbumStateFlow().value
+                            .shuffled()
+                            .take(MAX_SECTION_ITEMS)
+                            .map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -416,7 +423,9 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_RECENT_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        recentAlbumsStateFlow().value.map { albumItem(it) },
+                        recentAlbumsStateFlow().value
+                            .take(MAX_SECTION_ITEMS)
+                            .map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -424,7 +433,9 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_LATEST_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        latestAlbumsStateFlow().value.map { albumItem(it) },
+                        latestAlbumsStateFlow().value
+                            .take(MAX_SECTION_ITEMS)
+                            .map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -432,7 +443,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_HIGHEST_RATED_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        highestAlbumsStateFlow().value.map { albumItem(it) },
+                        highestAlbumsStateFlow().value
+                            .sortedByDescending { it.rating }
+                            .take(MAX_SECTION_ITEMS)
+                            .map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -901,5 +915,8 @@ class Pa2MediaLibraryService : MediaLibraryService() {
     companion object {
         /** Timeout for drill-down into playlists/albums. Reduced from 66.6s (Bug 4). */
         internal const val FETCH_TIMEOUT_MS = 666_000L
+
+        /** Maximum items per section to avoid overwhelming the car display. */
+        internal const val MAX_SECTION_ITEMS = 66
     }
 }
