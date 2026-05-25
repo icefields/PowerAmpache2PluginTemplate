@@ -22,6 +22,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -32,12 +33,12 @@ fun MainScreen(onBackClick: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Power Ampache 2") },
+                title = { Text(stringResource(R.string.main_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Navigate back"
+                            contentDescription = stringResource(R.string.cd_navigate_back)
                         )
                     }
                 },
@@ -68,7 +69,7 @@ fun MainScreen(onBackClick: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Android Auto Plugin",
+                text = stringResource(R.string.main_screen_subtitle),
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,
@@ -78,16 +79,16 @@ fun MainScreen(onBackClick: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "This app works as a companion to Power Ampache 2. It does not play music on its own — it provides your music library to Android Auto on your car's head unit.",
+                text = stringResource(R.string.main_screen_description),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "How to connect",
+                text = stringResource(R.string.main_screen_how_to_connect),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
@@ -98,9 +99,9 @@ fun MainScreen(onBackClick: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "1. Open Power Ampache 2 on your phone\n2. Open the side menu, go to Plugin\n3. Tap Android Auto to start data sharing\n4. Browse and play music from your car's display",
+                text = stringResource(R.string.main_screen_steps),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Start,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -108,7 +109,7 @@ fun MainScreen(onBackClick: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "Note: The host app must stay running while using Android Auto. The Plugin menu starts a foreground service that keeps the data exchange alive.",
+                text = stringResource(R.string.main_screen_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center

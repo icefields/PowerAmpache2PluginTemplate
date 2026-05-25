@@ -135,16 +135,16 @@ fun SongListScreen(viewModel: SongListViewModel = hiltViewModel()) {
                     }
 
                     IconButton(onClick = {  }) {
-                        Icon(Icons.Default.SkipPrevious, contentDescription = "Previous")
+                        Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.cd_previous))
                     }
                     IconButton(onClick = {  }) {
                         Icon(
                             if (uiState.value.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (uiState.value.isPlaying) "Pause" else "Play"
+                            contentDescription = if (uiState.value.isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play)
                         )
                     }
                     IconButton(onClick = {  }) {
-                        Icon(Icons.Default.SkipNext, contentDescription = "Next")
+                        Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.cd_next))
                     }
                 }
             }

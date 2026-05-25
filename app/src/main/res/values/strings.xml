@@ -12,4 +12,19 @@
     <string name="media_section_highest_rated_albums">Highest Rated</string>
     <string name="media_no_data_title">Open Power Ampache 2 on your phone</string>
     <string name="media_no_data_instructions">go to Plugin menu, tap Android Auto</string>
+
+    <!-- MainScreen -->
+    <string name="main_screen_title">Power Ampache 2</string>
+    <string name="main_screen_subtitle">Android Auto Plugin</string>
+    <string name="main_screen_description">This app works as a companion to Power Ampache 2. It provides your music library to Android Auto on your car\'s head unit.</string>
+    <string name="main_screen_how_to_connect">How to connect</string>
+    <string name="main_screen_steps">1. Open Power Ampache 2 on your phone\n2. Open the side menu, go to Plugin\n3. Tap Android Auto to start data sharing\n4. Open the plugin on your car\'s display and browse your music</string>
+    <string name="main_screen_note">Note: The host app must stay running while using Android Auto. The Plugin menu starts a foreground service that keeps the data exchange alive.</string>
+
+    <!-- SongListScreen -->
+    <string name="cd_navigate_back">Navigate back</string>
+    <string name="cd_previous">Previous</string>
+    <string name="cd_pause">Pause</string>
+    <string name="cd_play">Play</string>
+    <string name="cd_next">Next</string>
 </resources>
