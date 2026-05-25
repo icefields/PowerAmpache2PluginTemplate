@@ -24,6 +24,8 @@ import android.widget.Toast
 import androidx.concurrent.futures.CallbackToFutureAdapter
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -139,7 +141,16 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         val fetchIntent = Intent(this, PA2DataFetchService::class.java)
         startService(fetchIntent)
         dataFetchBound = bindService(fetchIntent, dataFetchConnection, Context.BIND_AUTO_CREATE)
-        val exoPlayer = ExoPlayer.Builder(applicationContext).build().also { player = it }
+        val audioAttributes = AudioAttributes.Builder()
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+            .setUsage(C.USAGE_MEDIA)
+            .build()
+        val exoPlayer = ExoPlayer.Builder(applicationContext)
+            .setAudioAttributes(audioAttributes, /* handleAudioFocus= */ true)
+            .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .build()
+        player = exoPlayer
         val callback = Pa2LibraryCallback()
         librarySession = MediaLibrarySession.Builder(this, exoPlayer, callback).build()
         subscribeToLibraryChanges()
