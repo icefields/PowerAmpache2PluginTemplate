@@ -20,6 +20,8 @@ internal object MediaIds {
     const val SECTION_LATEST_ALBUMS = "section/latest_albums"
     const val SECTION_HIGHEST_RATED_ALBUMS = "section/highest_rated_albums"
 
+    const val NO_DATA = "no_data"
+
     private const val PREFIX_PLAYLIST = "playlist/"
     private const val PREFIX_ALBUM = "album/"
     private const val PREFIX_SONG = "song/"

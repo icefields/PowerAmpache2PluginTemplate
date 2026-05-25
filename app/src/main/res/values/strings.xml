@@ -10,4 +10,6 @@
     <string name="media_section_recent_albums">Recent albums</string>
     <string name="media_section_newest_albums">Newest albums</string>
     <string name="media_section_highest_rated_albums">Highest-rated albums</string>
+    <string name="media_no_data_title">Open Power Ampache 2 on your phone</string>
+    <string name="media_no_data_subtitle">Go to Plugin → Android Auto to start sharing your library</string>
 </resources>

@@ -370,10 +370,21 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             params: MediaLibraryService.LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             return when (parentId) {
-                MediaIds.ROOT -> immediateChildren(
-                    sliceForPage(rootSections(), page, pageSize),
-                    params
-                )
+                MediaIds.ROOT -> {
+                    val sections = rootSections()
+                    // If all sections are empty, show a placeholder telling the user to open the host app
+                    if (sections.isEmpty() || isLibraryEmpty()) {
+                        immediateChildren(
+                            sliceForPage(listOf(noDataItem()), page, pageSize),
+                            params
+                        )
+                    } else {
+                        immediateChildren(
+                            sliceForPage(sections, page, pageSize),
+                            params
+                        )
+                    }
+                }
                 MediaIds.SECTION_PLAYLISTS -> immediateChildren(
                     sliceForPage(
                         playlistsStateFlow().value.map { playlistItem(it) },
@@ -456,6 +467,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                     MediaIds.SECTION_HIGHEST_RATED_ALBUMS,
                     getString(R.string.media_section_highest_rated_albums)
                 )
+                mediaId == MediaIds.NO_DATA -> noDataItem()
                 else -> {
                     val pid = MediaIds.parsePlaylistId(mediaId)
                     if (pid != null) {
@@ -597,6 +609,19 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         )
 
         private fun sectionItem(id: String, title: String): MediaItem = browsableItem(id, title)
+
+        private fun noDataItem(): MediaItem =
+            MediaItem.Builder()
+                .setMediaId(MediaIds.NO_DATA)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(getString(R.string.media_no_data_title))
+                        .setSubtitle(getString(R.string.media_no_data_subtitle))
+                        .setIsBrowsable(false)
+                        .setIsPlayable(false)
+                        .build()
+                )
+                .build()
 
         private fun browsableItem(id: String, title: String): MediaItem =
             MediaItem.Builder()
@@ -835,10 +860,16 @@ class Pa2MediaLibraryService : MediaLibraryService() {
     }
 
     fun getAlbumFromId(albumId: String): Album? = albumsCache[albumId]
-        //albumSongsMapFlow.value.keys.find { it.id == albumId }
 
     fun getSongsFromAlbum(albumId: String): List<Song> = albumSongsMap[albumId] ?: emptyList()
-        //albumSongsMapFlow.value.entries.find { it.key.id == albumId }?.value ?: emptyList()
+
+    /** Returns true when the host app has not yet pushed any library data. */
+    private fun isLibraryEmpty(): Boolean =
+        playlistsFlow.value.isEmpty() &&
+            favouriteAlbumStateFlow().value.isEmpty() &&
+            recentAlbumsStateFlow().value.isEmpty() &&
+            latestAlbumsStateFlow().value.isEmpty() &&
+            highestAlbumsStateFlow().value.isEmpty()
 
     companion object {
         /** Timeout for drill-down into playlists/albums. Reduced from 66.6s (Bug 4). */
