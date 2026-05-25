@@ -4,7 +4,7 @@
     "type": "APK",
     "kind": "Directory"
   },
-  "applicationId": "luci.sixsixsix.powerampache2.chromecastplugin",
+  "applicationId": "luci.sixsixsix.powerampache2.plugin",
   "variantName": "release",
   "elements": [
     {

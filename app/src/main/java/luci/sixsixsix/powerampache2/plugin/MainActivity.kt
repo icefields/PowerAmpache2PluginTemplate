@@ -39,19 +39,6 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity(), BackPressHandler by BackPressHandlerImpl() {
-//    override fun onCreate(savedInstanceState: Bundle?) {
-//        super.onCreate(savedInstanceState)
-//        //launchPowerAmpache2()
-//        mainScreenContent()
-//        handleOnBackPressed(this) // prevent the activity from being destroyed on back-press
-//
-//        // uncomment for testing, viewModel contains a few examples to get data
-//        // testContent()
-//    }
-
-
-
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge() // proper system bar handling
@@ -67,17 +54,6 @@ class MainActivity : FragmentActivity(), BackPressHandler by BackPressHandlerImp
                     //    handleOnBackPressed(this)
                     }
                 )
-            }
-        }
-    }
-
-    private fun mainScreenContent() {
-        setContent {
-            PowerAmpache2Theme(
-                darkTheme = true,
-                dynamicColor = false
-            ) {
-                MainScreen {  }
             }
         }
     }
