@@ -11,7 +11,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "luci.sixsixsix.powerampache2.plugin"
+        applicationId = "luci.sixsixsix.powerampache2.plugin.auto"
         minSdk = 30
         targetSdk = 36
         versionCode = 7
