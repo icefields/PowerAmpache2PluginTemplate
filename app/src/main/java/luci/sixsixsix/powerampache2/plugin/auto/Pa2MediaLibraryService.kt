@@ -424,6 +424,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 MediaIds.SECTION_RECENT_ALBUMS -> immediateChildren(
                     sliceForPage(
                         recentAlbumsStateFlow().value
+                            .reversed()
                             .take(MAX_SECTION_ITEMS)
                             .map { albumItem(it) },
                         page,
@@ -434,6 +435,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 MediaIds.SECTION_LATEST_ALBUMS -> immediateChildren(
                     sliceForPage(
                         latestAlbumsStateFlow().value
+                            .reversed()
                             .take(MAX_SECTION_ITEMS)
                             .map { albumItem(it) },
                         page,
