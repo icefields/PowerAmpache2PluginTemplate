@@ -424,7 +424,6 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 MediaIds.SECTION_RECENT_ALBUMS -> immediateChildren(
                     sliceForPage(
                         recentAlbumsStateFlow().value
-                            .reversed()
                             .take(MAX_SECTION_ITEMS)
                             .map { albumItem(it) },
                         page,
@@ -435,7 +434,6 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 MediaIds.SECTION_LATEST_ALBUMS -> immediateChildren(
                     sliceForPage(
                         latestAlbumsStateFlow().value
-                            .reversed()
                             .take(MAX_SECTION_ITEMS)
                             .map { albumItem(it) },
                         page,
@@ -696,7 +694,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(a.name)
-                        .setSubtitle(a.artist.name)
+                        .setArtist(a.artist.name)
                         .setIsBrowsable(true)
                         .setIsPlayable(false)
                         .build()
