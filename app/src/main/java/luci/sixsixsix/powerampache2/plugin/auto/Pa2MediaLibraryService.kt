@@ -524,7 +524,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: List<MediaItem>,
         ): ListenableFuture<List<MediaItem>> {
-            val resolved = mediaItems.map { resolveForPlayback(it) }
+            // Filter out no-data placeholder items — they have no stream URI and would crash ExoPlayer
+            val filtered = mediaItems.filterNot { it.mediaId == MediaIds.NO_DATA || it.mediaId == MediaIds.NO_DATA_INSTRUCTIONS }
+            if (filtered.isEmpty()) return Futures.immediateFuture(emptyList())
+            val resolved = filtered.map { resolveForPlayback(it) }
             if (resolved.size == 1) {
                 val id = resolved[0].mediaId
                 val songId = MediaIds.parseSongId(id)
@@ -546,7 +549,14 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             startIndex: Int,
             startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-            val resolved = mediaItems.map { resolveForPlayback(it) }
+            // Filter out no-data placeholder items — they have no stream URI and would crash ExoPlayer
+            val filtered = mediaItems.filterNot { it.mediaId == MediaIds.NO_DATA || it.mediaId == MediaIds.NO_DATA_INSTRUCTIONS }
+            if (filtered.isEmpty()) {
+                return Futures.immediateFuture(
+                    MediaSession.MediaItemsWithStartPosition(emptyList(), 0, 0L)
+                )
+            }
+            val resolved = filtered.map { resolveForPlayback(it) }
             if (resolved.size == 1) {
                 val id = resolved[0].mediaId
                 val songId = MediaIds.parseSongId(id)
