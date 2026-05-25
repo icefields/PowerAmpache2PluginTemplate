@@ -44,7 +44,7 @@
             android:name=".auto.Pa2MediaLibraryService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback"
-            android:icon="@drawable/ic_cast"
+            android:icon="@drawable/ic_launcher_coloured"
             android:label="@string/media_browse_root_title">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaLibraryService" />
