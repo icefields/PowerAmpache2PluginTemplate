@@ -48,6 +48,3 @@ The plugin is an **IPC client** of the main Power Ampache 2 app. It does not tal
 - **Gson** — JSON deserialization of host app data into domain models
 - **Jetpack Compose + Material3** — phone UI
 
-## Contributing
-
-See `AGENTS.md` for rules on scope, branch policy, and git safety.
