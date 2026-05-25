@@ -375,7 +375,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                     // If all sections are empty, show a placeholder telling the user to open the host app
                     if (sections.isEmpty() || isLibraryEmpty()) {
                         immediateChildren(
-                            sliceForPage(listOf(noDataItem()), page, pageSize),
+                            sliceForPage(noDataItems(), page, pageSize),
                             params
                         )
                     } else {
@@ -386,7 +386,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                     }
                 }
                 MediaIds.NO_DATA -> immediateChildren(
-                    sliceForPage(listOf(noDataItem()), page, pageSize),
+                    sliceForPage(noDataItems(), page, pageSize),
                     params
                 )
                 MediaIds.SECTION_PLAYLISTS -> immediateChildren(
@@ -472,6 +472,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                     getString(R.string.media_section_highest_rated_albums)
                 )
                 mediaId == MediaIds.NO_DATA -> noDataItem()
+                mediaId == MediaIds.NO_DATA_INSTRUCTIONS -> noDataInstructionsItem()
                 else -> {
                     val pid = MediaIds.parsePlaylistId(mediaId)
                     if (pid != null) {
@@ -620,12 +621,25 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(getString(R.string.media_no_data_title))
-                        .setSubtitle(getString(R.string.media_no_data_subtitle))
                         .setIsBrowsable(true)
                         .setIsPlayable(false)
                         .build()
                 )
                 .build()
+
+        private fun noDataInstructionsItem(): MediaItem =
+            MediaItem.Builder()
+                .setMediaId(MediaIds.NO_DATA_INSTRUCTIONS)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(getString(R.string.media_no_data_instructions))
+                        .setIsBrowsable(false)
+                        .setIsPlayable(false)
+                        .build()
+                )
+                .build()
+
+        private fun noDataItems(): List<MediaItem> = listOf(noDataItem(), noDataInstructionsItem())
 
         private fun browsableItem(id: String, title: String): MediaItem =
             MediaItem.Builder()
