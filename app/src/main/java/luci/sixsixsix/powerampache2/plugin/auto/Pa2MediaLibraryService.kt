@@ -394,13 +394,13 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                         )
                     }
                 }
-                MediaIds.NO_DATA -> immediateChildren(
-                    sliceForPage(noDataItems(), page, pageSize),
-                    params
-                )
                 MediaIds.SECTION_PLAYLISTS -> immediateChildren(
                     sliceForPage(
-                        playlistsStateFlow().value.map { playlistItem(it) },
+                        playlistsStateFlow().value
+                            .sortedWith(compareByDescending<Playlist> { it.flag }
+                                .thenByDescending { it.rating }
+                                .thenByDescending { it.averageRating })
+                            .map { playlistItem(it) },
                         page,
                         pageSize
                     ),
@@ -408,7 +408,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_FAVOURITE_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        favouriteAlbumStateFlow().value.map { albumItem(it) },
+                        favouriteAlbumStateFlow().value
+                            .shuffled()
+                            .take(MAX_SECTION_ITEMS)
+                            .map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -416,7 +419,9 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_RECENT_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        recentAlbumsStateFlow().value.map { albumItem(it) },
+                        recentAlbumsStateFlow().value
+                            .take(MAX_SECTION_ITEMS)
+                            .map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -424,7 +429,9 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_LATEST_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        latestAlbumsStateFlow().value.map { albumItem(it) },
+                        latestAlbumsStateFlow().value
+                            .take(MAX_SECTION_ITEMS)
+                            .map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -432,7 +439,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 )
                 MediaIds.SECTION_HIGHEST_RATED_ALBUMS -> immediateChildren(
                     sliceForPage(
-                        highestAlbumsStateFlow().value.map { albumItem(it) },
+                        highestAlbumsStateFlow().value
+                            .sortedByDescending { it.rating }
+                            .take(MAX_SECTION_ITEMS)
+                            .map { albumItem(it) },
                         page,
                         pageSize
                     ),
@@ -514,7 +524,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: List<MediaItem>,
         ): ListenableFuture<List<MediaItem>> {
-            val resolved = mediaItems.map { resolveForPlayback(it) }
+            // Filter out no-data placeholder items — they have no stream URI and would crash ExoPlayer
+            val filtered = mediaItems.filterNot { it.mediaId == MediaIds.NO_DATA || it.mediaId == MediaIds.NO_DATA_INSTRUCTIONS }
+            if (filtered.isEmpty()) return Futures.immediateFuture(emptyList())
+            val resolved = filtered.map { resolveForPlayback(it) }
             if (resolved.size == 1) {
                 val id = resolved[0].mediaId
                 val songId = MediaIds.parseSongId(id)
@@ -536,7 +549,14 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             startIndex: Int,
             startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-            val resolved = mediaItems.map { resolveForPlayback(it) }
+            // Filter out no-data placeholder items — they have no stream URI and would crash ExoPlayer
+            val filtered = mediaItems.filterNot { it.mediaId == MediaIds.NO_DATA || it.mediaId == MediaIds.NO_DATA_INSTRUCTIONS }
+            if (filtered.isEmpty()) {
+                return Futures.immediateFuture(
+                    MediaSession.MediaItemsWithStartPosition(emptyList(), 0, 0L)
+                )
+            }
+            val resolved = filtered.map { resolveForPlayback(it) }
             if (resolved.size == 1) {
                 val id = resolved[0].mediaId
                 val songId = MediaIds.parseSongId(id)
@@ -609,16 +629,16 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 getString(R.string.media_section_favourite_albums)
             ),
             sectionItem(
-                MediaIds.SECTION_RECENT_ALBUMS,
-                getString(R.string.media_section_recent_albums)
-            ),
-            sectionItem(
                 MediaIds.SECTION_LATEST_ALBUMS,
                 getString(R.string.media_section_newest_albums)
             ),
             sectionItem(
                 MediaIds.SECTION_HIGHEST_RATED_ALBUMS,
                 getString(R.string.media_section_highest_rated_albums)
+            ),
+            sectionItem(
+                MediaIds.SECTION_RECENT_ALBUMS,
+                getString(R.string.media_section_recent_albums)
             ),
         )
 
@@ -627,11 +647,12 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         private fun noDataItem(): MediaItem =
             MediaItem.Builder()
                 .setMediaId(MediaIds.NO_DATA)
+                .setUri("https://localhost/no-data")
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(getString(R.string.media_no_data_title))
-                        .setIsBrowsable(true)
-                        .setIsPlayable(false)
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
                         .build()
                 )
                 .build()
@@ -639,11 +660,12 @@ class Pa2MediaLibraryService : MediaLibraryService() {
         private fun noDataInstructionsItem(): MediaItem =
             MediaItem.Builder()
                 .setMediaId(MediaIds.NO_DATA_INSTRUCTIONS)
+                .setUri("https://localhost/no-data")
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(getString(R.string.media_no_data_instructions))
                         .setIsBrowsable(false)
-                        .setIsPlayable(false)
+                        .setIsPlayable(true)
                         .build()
                 )
                 .build()
@@ -680,7 +702,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(a.name)
-                        .setSubtitle(a.artist.name)
+                        .setArtist(a.artist.name)
                         .setIsBrowsable(true)
                         .setIsPlayable(false)
                         .build()
@@ -901,5 +923,8 @@ class Pa2MediaLibraryService : MediaLibraryService() {
     companion object {
         /** Timeout for drill-down into playlists/albums. Reduced from 66.6s (Bug 4). */
         internal const val FETCH_TIMEOUT_MS = 666_000L
+
+        /** Maximum items per section to avoid overwhelming the car display. */
+        internal const val MAX_SECTION_ITEMS = 66
     }
 }
