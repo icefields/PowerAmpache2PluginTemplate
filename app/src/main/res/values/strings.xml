@@ -10,6 +10,6 @@
     <string name="media_section_recent_albums">Recent albums</string>
     <string name="media_section_newest_albums">Newest albums</string>
     <string name="media_section_highest_rated_albums">Highest-rated albums</string>
-    <string name="media_no_data_title">Open Power Ampache 2 → Plugin → Android Auto</string>
-    <string name="media_no_data_subtitle">Tap to connect and share your music library</string>
+    <string name="media_no_data_title">Connect app</string>
+    <string name="media_no_data_subtitle">Open Power Ampache 2 → Plugin → Android Auto</string>
 </resources>

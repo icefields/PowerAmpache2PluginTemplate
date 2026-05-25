@@ -385,6 +385,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                         )
                     }
                 }
+                MediaIds.NO_DATA -> immediateChildren(
+                    sliceForPage(listOf(noDataItem()), page, pageSize),
+                    params
+                )
                 MediaIds.SECTION_PLAYLISTS -> immediateChildren(
                     sliceForPage(
                         playlistsStateFlow().value.map { playlistItem(it) },
@@ -617,7 +621,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                     MediaMetadata.Builder()
                         .setTitle(getString(R.string.media_no_data_title))
                         .setSubtitle(getString(R.string.media_no_data_subtitle))
-                        .setIsBrowsable(false)
+                        .setIsBrowsable(true)
                         .setIsPlayable(false)
                         .build()
                 )
