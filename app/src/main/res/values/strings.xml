@@ -11,5 +11,5 @@
     <string name="media_section_newest_albums">Newest</string>
     <string name="media_section_highest_rated_albums">Highest Rated</string>
     <string name="media_no_data_title">Open Power Ampache 2 on your phone</string>
-    <string name="media_no_data_instructions">Open Power Ampache 2, go to Plugin menu, tap Android Auto</string>
+    <string name="media_no_data_instructions">go to Plugin menu, tap Android Auto</string>
 </resources>
