@@ -394,6 +394,10 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                         )
                     }
                 }
+                MediaIds.NO_DATA -> immediateChildren(
+                    sliceForPage(noDataItems(), page, pageSize),
+                    params
+                )
                 MediaIds.SECTION_PLAYLISTS -> immediateChildren(
                     sliceForPage(
                         playlistsStateFlow().value
@@ -650,8 +654,8 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(getString(R.string.media_no_data_title))
-                        .setIsBrowsable(false)
-                        .setIsPlayable(true)
+                        .setIsBrowsable(true)
+                        .setIsPlayable(false)
                         .build()
                 )
                 .build()
@@ -663,7 +667,7 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                     MediaMetadata.Builder()
                         .setTitle(getString(R.string.media_no_data_instructions))
                         .setIsBrowsable(false)
-                        .setIsPlayable(true)
+                        .setIsPlayable(false)
                         .build()
                 )
                 .build()
