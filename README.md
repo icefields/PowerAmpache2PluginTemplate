@@ -41,31 +41,12 @@ The plugin is an **IPC client** of the main Power Ampache 2 app. It does not tal
 
 6. **Host queue mirroring.** When the host app plays audio on the phone, it pushes its queue via `MusicFetcher.currentQueueFlow`. The plugin mirrors this queue into ExoPlayer (paused) so Android Auto shows Now Playing metadata without requiring the head unit to have initiated playback.
 
-### Module Breakdown
+### Libraries Used
 
-| Module | Role | Editable? |
-| --- | --- | --- |
-| `domain` | Pure Kotlin interfaces, models, use cases, constants. No Android dependencies. | ❌ Do not modify |
-| `data` | `MusicFetcherImpl`, DTOs, DI modules, `PA2DataFetchService` (IPC + JSON parsing). | ❌ Do not modify |
-| `app` | Compose UI, `Pa2MediaLibraryService` (Media3 + ExoPlayer), ViewModels, Android Auto integration. | ✅ |
-| `PowerAmpache2Theme` | Shared Material3 theme (Nunito font, custom colours). | ✅ |
-
-### Key Technologies
-
-- **Media3 / MediaLibraryService** — Android Auto browse tree and playback session
-- **ExoPlayer** — streams audio from Ampache URLs with `USAGE_MEDIA` audio attributes
-- **Dagger Hilt** — dependency injection across all modules
-- **Kotlin StateFlow** — reactive data propagation from IPC → use cases → UI
-- **Messenger IPC** — bidirectional communication between host app and plugin
-- **Jetpack Compose + Material3** — phone UI (minimal; primary UI is the car head unit)
+- **Media3 / ExoPlayer** — Android Auto browse tree, playback session, and audio streaming
+- **Dagger Hilt** — dependency injection
 - **Gson** — JSON deserialization of host app data into domain models
-
-## Branches
-
-| Branch | Role |
-| --- | --- |
-| `main` | Tracks upstream only. No feature work. |
-| `bugfix/auto-no_playback` | Audio playback fix (AudioAttributes, WAKE_LOCK, audio focus) |
+- **Jetpack Compose + Material3** — phone UI
 
 ## Contributing
 
