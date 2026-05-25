@@ -44,7 +44,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
+
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNot
@@ -228,44 +228,61 @@ class Pa2MediaLibraryService : MediaLibraryService() {
     private fun subscribeToLibraryChanges() {
         val session = librarySession ?: return
 
-        serviceScope.launch {
-            combine(
-                playlistsStateFlow().filterNotNull().filterNot { it.isEmpty() },
-                favouriteAlbumStateFlow().filterNotNull().filterNot { it.isEmpty() },
-                recentAlbumsStateFlow().filterNotNull().filterNot { it.isEmpty() },
-                latestAlbumsStateFlow().filterNotNull().filterNot { it.isEmpty() },
-                highestAlbumsStateFlow().filterNotNull().filterNot { it.isEmpty() }
-            ) { playlists, favourites, recent, latest, highest ->
-                SectionSnapshot(playlists, favourites, recent, latest, highest).also {
-                    // add all fetched albums to cache
-                    addToAlbumCache(favourites)
-                    addToAlbumCache(recent)
-                    addToAlbumCache(latest)
-                    addToAlbumCache(highest)
-                }
-            }.collectLatest { snapshot ->
-                withContext(Dispatchers.Main) {
-                    session.notifyChildrenChanged(MediaIds.ROOT, 0, null)
-                    if (snapshot.playlists.isNotEmpty())
-                        session.notifyChildrenChanged(MediaIds.SECTION_PLAYLISTS, 0, null)
-                    if (snapshot.favourites.isNotEmpty())
-                        session.notifyChildrenChanged(MediaIds.SECTION_FAVOURITE_ALBUMS, 0, null)
-                    if (snapshot.recent.isNotEmpty())
-                        session.notifyChildrenChanged(MediaIds.SECTION_RECENT_ALBUMS, 0, null)
-                    if (snapshot.latest.isNotEmpty())
-                        session.notifyChildrenChanged(MediaIds.SECTION_LATEST_ALBUMS, 0, null)
-                    if (snapshot.highest.isNotEmpty())
-                        session.notifyChildrenChanged(MediaIds.SECTION_HIGHEST_RATED_ALBUMS, 0, null)
-                }
-            }
+        // Notify ROOT whenever any section gets data — don't wait for all 5 sections
+        // (combine would block until every flow emits a non-empty value).
+        val rootSession = session
+        val notifyRoot: (Any?) -> Unit = {
+            rootSession.notifyChildrenChanged(MediaIds.ROOT, 0, null)
         }
 
         serviceScope.launch {
             playlistsStateFlow().filterNotNull().filterNot { it.isEmpty() }.collectLatest { playlists ->
                 withContext(Dispatchers.Main) {
+                    notifyRoot(null)
+                    session.notifyChildrenChanged(MediaIds.SECTION_PLAYLISTS, 0, null)
                     playlists.forEach { pl ->
                         session.notifyChildrenChanged(MediaIds.playlist(pl.id), 0, null)
                     }
+                }
+            }
+        }
+
+        serviceScope.launch {
+            favouriteAlbumStateFlow().filterNotNull().filterNot { it.isEmpty() }.collectLatest { favourites ->
+                withContext(Dispatchers.Main) {
+                    notifyRoot(null)
+                    addToAlbumCache(favourites)
+                    session.notifyChildrenChanged(MediaIds.SECTION_FAVOURITE_ALBUMS, 0, null)
+                }
+            }
+        }
+
+        serviceScope.launch {
+            recentAlbumsStateFlow().filterNotNull().filterNot { it.isEmpty() }.collectLatest { recent ->
+                withContext(Dispatchers.Main) {
+                    notifyRoot(null)
+                    addToAlbumCache(recent)
+                    session.notifyChildrenChanged(MediaIds.SECTION_RECENT_ALBUMS, 0, null)
+                }
+            }
+        }
+
+        serviceScope.launch {
+            latestAlbumsStateFlow().filterNotNull().filterNot { it.isEmpty() }.collectLatest { latest ->
+                withContext(Dispatchers.Main) {
+                    notifyRoot(null)
+                    addToAlbumCache(latest)
+                    session.notifyChildrenChanged(MediaIds.SECTION_LATEST_ALBUMS, 0, null)
+                }
+            }
+        }
+
+        serviceScope.launch {
+            highestAlbumsStateFlow().filterNotNull().filterNot { it.isEmpty() }.collectLatest { highest ->
+                withContext(Dispatchers.Main) {
+                    notifyRoot(null)
+                    addToAlbumCache(highest)
+                    session.notifyChildrenChanged(MediaIds.SECTION_HIGHEST_RATED_ALBUMS, 0, null)
                 }
             }
         }
@@ -280,14 +297,6 @@ class Pa2MediaLibraryService : MediaLibraryService() {
             }
         }
     }
-
-    private data class SectionSnapshot(
-        val playlists: List<Playlist>,
-        val favourites: List<Album>,
-        val recent: List<Album>,
-        val latest: List<Album>,
-        val highest: List<Album>
-    )
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
         librarySession
