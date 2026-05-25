@@ -1,29 +1,72 @@
-# Power Ampache 2 — plugin template & Android Auto (dev)
+# Power Ampache 2 — Plugin Template & Android Auto
 
-This repository is the **Power Ampache 2 plugin template**: `domain`, `data`, `app`, and `PowerAmpache2Theme` modules with Clean Architecture.
+This repository is the **Power Ampache 2 plugin template** — a companion app that provides Android Auto browse and playback for a self-hosted [Ampache](https://ampache.org/) music server, powered by [Power Ampache 2](https://github.com/icefields/PowerAmpache2PluginTemplate) as the host app.
 
-On **`cursor-cloud/dev-main-4dc1`**, work focuses on a **functional** Android Auto browse/playback path via **`Pa2MediaLibraryService`**, **`MusicFetcher`**, and the host’s **`PA2DataFetchService`** IPC. **Known bugs** remain until addressed before release.
+Built with **Clean Architecture** across four modules: `domain`, `data`, `app`, and `PowerAmpache2Theme`.
 
-**Agents and contributors:** read **[`AGENTS.md`](AGENTS.md)** (branch policy, scope, build/DHU, verification, upstream checklist).
+## How It Works
 
-## Design reference (DHU)
+### Architecture Overview
 
-Static reference image: **`mockups/assets/`**. The head unit renders now playing; the plugin supplies Media3 session metadata — the PNG is a **reference**, not a promise of identical pixels on every device.
+The plugin is an **IPC client** of the main Power Ampache 2 app. It does not talk to the Ampache server directly — all data comes through the host app via a **Messenger-based IPC bridge**.
 
-| | |
-| --- | --- |
-| ![DHU — now playing](mockups/assets/dhu-now-playing.png) | *DHU — now playing (reference)* |
+```
+┌─────────────────────┐    Messenger IPC    ┌──────────────────────────┐
+│   Power Ampache 2    │ ◄─────────────────► │  Plugin (this app)       │
+│   (host app)         │   (bidirectional)   │                          │
+│                     │                     │  PA2DataFetchService     │
+│   - Ampache API     │ ─── sends data ───► │   └─ MusicFetcherImpl   │
+│   - Stream URLs     │                     │       └─ StateFlows     │
+│   - Playback queue  │                     │                          │
+│                     │ ◄── requests data ── │  Pa2MediaLibraryService │
+│                     │                     │   └─ ExoPlayer           │
+│                     │                     │   └─ Media3 Session      │
+└─────────────────────┘                     └──────────────────────────┘
+                                                      │
+                                              Android Auto (car head unit)
+                                              browses via Media3 library
+```
 
-**Full mockups & research** live on branch **`mockups`** — see that branch’s [README](https://github.com/shahzebqazi/PowerAmpache2PluginTemplate/blob/mockups/README.md) on GitHub.
+### Data Flow
 
-## Branches (this fork)
+1. **Plugin binds to host.** When `Pa2MediaLibraryService` starts, it starts and binds to `PA2DataFetchService` (in the `data` module). This service exposes a `Messenger` interface — the host app connects as a client and registers itself via `register_client`.
+
+2. **Host pushes data.** The host app sends JSON-serialized playlists, albums, artists, and songs through the Messenger. `PA2DataFetchService` parses these with Gson and updates `MusicFetcherImpl`'s `StateFlow`s (`playlistsFlow`, `albumsFlow`, `albumSongsMapFlow`, etc.).
+
+3. **Plugin requests data.** When Android Auto drills into a browse node (e.g. an album), `Pa2MediaLibraryService` calls domain use cases (`GetSongsFromAlbumUseCase`, etc.) which flow through `MusicFetcherImpl` → `MusicFetcherListener` → `PA2DataFetchService`, which sends a Messenger request to the host. The host responds asynchronously with the JSON data, which updates the relevant `StateFlow`.
+
+4. **Auto browses the library.** `Pa2MediaLibraryService` implements Media3's `MediaLibraryService`. Android Auto calls `onGetLibraryRoot`, `onGetChildren`, and `onGetItem` to navigate a browse tree: root → sections (playlists, favourite/recent/latest/highest albums) → items → songs.
+
+5. **Playback via ExoPlayer.** When a user taps a song on the car display, Android Auto sends a `MediaItem` with only a `mediaId` (no URI — the framework strips `localConfiguration` for privacy). The `onAddMediaItems`/`onSetMediaItems` callbacks resolve the ID back to a `Song` object, re-attach the stream URL from `song.songUrl`, and expand a single song into a full album/playlist queue so skip/next works. ExoPlayer then streams the Ampache URL directly with proper `AudioAttributes`, audio focus handling, and wake lock.
+
+6. **Host queue mirroring.** When the host app plays audio on the phone, it pushes its queue via `MusicFetcher.currentQueueFlow`. The plugin mirrors this queue into ExoPlayer (paused) so Android Auto shows Now Playing metadata without requiring the head unit to have initiated playback.
+
+### Module Breakdown
+
+| Module | Role | Editable? |
+| --- | --- | --- |
+| `domain` | Pure Kotlin interfaces, models, use cases, constants. No Android dependencies. | ❌ Do not modify |
+| `data` | `MusicFetcherImpl`, DTOs, DI modules, `PA2DataFetchService` (IPC + JSON parsing). | ❌ Do not modify |
+| `app` | Compose UI, `Pa2MediaLibraryService` (Media3 + ExoPlayer), ViewModels, Android Auto integration. | ✅ |
+| `PowerAmpache2Theme` | Shared Material3 theme (Nunito font, custom colours). | ✅ |
+
+### Key Technologies
+
+- **Media3 / MediaLibraryService** — Android Auto browse tree and playback session
+- **ExoPlayer** — streams audio from Ampache URLs with `USAGE_MEDIA` audio attributes
+- **Dagger Hilt** — dependency injection across all modules
+- **Kotlin StateFlow** — reactive data propagation from IPC → use cases → UI
+- **Messenger IPC** — bidirectional communication between host app and plugin
+- **Jetpack Compose + Material3** — phone UI (minimal; primary UI is the car head unit)
+- **Gson** — JSON deserialization of host app data into domain models
+
+## Branches
 
 | Branch | Role |
 | --- | --- |
-| **`main`** | Tracks **`upstream/main`** only (`icefields/PowerAmpache2PluginTemplate`). No feature work; sync with `git fetch upstream` + `git reset --hard upstream/main` when aligning with upstream. |
-| **`cursor-cloud/dev-main-4dc1`** | Integration branch; topic branches use the **`cursor-cloud/`** prefix. |
-| **`mockups`** | Design/docs assets only (no app code on that branch). |
+| `main` | Tracks upstream only. No feature work. |
+| `bugfix/auto-no_playback` | Audio playback fix (AudioAttributes, WAKE_LOCK, audio focus) |
 
-## Contributing upstream
+## Contributing
 
-See **Contributing upstream (`PluginAndroidAuto`)** in [`AGENTS.md`](AGENTS.md). Do not change **`domain/`** or **`data/`** upstream unless the **upstream developer explicitly approves**. Match upstream **CI** and contribution rules published there.
+See `AGENTS.md` for rules on scope, branch policy, and git safety.
