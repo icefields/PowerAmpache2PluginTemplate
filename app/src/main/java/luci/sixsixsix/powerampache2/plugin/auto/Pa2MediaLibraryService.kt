@@ -623,16 +623,16 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                 getString(R.string.media_section_favourite_albums)
             ),
             sectionItem(
-                MediaIds.SECTION_RECENT_ALBUMS,
-                getString(R.string.media_section_recent_albums)
-            ),
-            sectionItem(
                 MediaIds.SECTION_LATEST_ALBUMS,
                 getString(R.string.media_section_newest_albums)
             ),
             sectionItem(
                 MediaIds.SECTION_HIGHEST_RATED_ALBUMS,
                 getString(R.string.media_section_highest_rated_albums)
+            ),
+            sectionItem(
+                MediaIds.SECTION_RECENT_ALBUMS,
+                getString(R.string.media_section_recent_albums)
             ),
         )
 
