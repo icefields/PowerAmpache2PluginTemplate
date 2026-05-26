@@ -41,6 +41,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -394,18 +395,30 @@ class Pa2MediaLibraryService : MediaLibraryService() {
                         )
                     }
                 }
-                MediaIds.SECTION_PLAYLISTS -> immediateChildren(
-                    sliceForPage(
-                        playlistsStateFlow().value
-                            .sortedWith(compareByDescending<Playlist> { it.flag }
-                                .thenByDescending { it.rating }
-                                .thenByDescending { it.averageRating })
-                            .map { playlistItem(it) },
-                        page,
-                        pageSize
-                    ),
-                    params
-                )
+                MediaIds.SECTION_PLAYLISTS -> {
+                    val playlists = playlistsStateFlow().value
+                    if (playlists.isEmpty()) {
+                        // Data may not have arrived yet — notify this section again shortly
+                        serviceScope.launch {
+                            delay(2000)
+                            withContext(Dispatchers.Main) {
+                                librarySession?.notifyChildrenChanged(MediaIds.SECTION_PLAYLISTS, 0, null)
+                            }
+                        }
+                    }
+                    immediateChildren(
+                        sliceForPage(
+                            playlists
+                                .sortedWith(compareByDescending<Playlist> { it.flag }
+                                    .thenByDescending { it.rating }
+                                    .thenByDescending { it.averageRating })
+                                .map { playlistItem(it) },
+                            page,
+                            pageSize
+                        ),
+                        params
+                    )
+                }
                 MediaIds.SECTION_FAVOURITE_ALBUMS -> immediateChildren(
                     sliceForPage(
                         favouriteAlbumStateFlow().value
