@@ -19,6 +19,6 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("luci.sixsixsix.powerampache2.chromecastplugin", appContext.packageName)
+        assertEquals("luci.sixsixsix.powerampache2.plugin", appContext.packageName)
     }
 }

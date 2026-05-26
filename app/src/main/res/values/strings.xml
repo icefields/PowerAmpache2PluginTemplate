@@ -4,4 +4,27 @@
     <string name="toast_noConnection_warning">Connect to Auto before playing music</string>
     <string name="mainScreen_emptyQueue_title">Empty Queue</string>
     <string name="mainScreen_emptyQueue_subtitle">Load a queue in Power Ampache 2 to start casting your music</string>
+    <string name="media_browse_root_title">Power Ampache 2</string>
+    <string name="media_section_playlists">Playlists</string>
+    <string name="media_section_favourite_albums">Favourites</string>
+    <string name="media_section_recent_albums">Recent</string>
+    <string name="media_section_newest_albums">Newest</string>
+    <string name="media_section_highest_rated_albums">Highest Rated</string>
+    <string name="media_no_data_title">Open Power Ampache 2 on your phone</string>
+    <string name="media_no_data_instructions">go to Plugin menu, tap Android Auto</string>
+
+    <!-- MainScreen -->
+    <string name="main_screen_title">Power Ampache 2</string>
+    <string name="main_screen_subtitle">Android Auto Plugin</string>
+    <string name="main_screen_description">This app works as a companion to Power Ampache 2. It provides your music library to Android Auto on your car\'s head unit.</string>
+    <string name="main_screen_how_to_connect">How to connect</string>
+    <string name="main_screen_steps">The plugin should connect automatically, unless the main app is not running or it\'s been killed by the system.\nRe-opening Power Ampache 2 on your phone will force a fresh sync\n1. Open the side menu, go to Plugin\n2. Tap Android Auto to start data sharing\n\nIf lists do not load, try forcing sync again by pressing on the Android Auto button, in the Plugins screen</string>
+    <string name="main_screen_note">Note: The host app must stay running while using Android Auto. The Plugin menu starts a foreground service that keeps the data exchange alive. If you swipe that notification away, you might lose Auto connection after a while.</string>
+
+    <!-- SongListScreen -->
+    <string name="cd_navigate_back">Navigate back</string>
+    <string name="cd_previous">Previous</string>
+    <string name="cd_pause">Pause</string>
+    <string name="cd_play">Play</string>
+    <string name="cd_next">Next</string>
 </resources>

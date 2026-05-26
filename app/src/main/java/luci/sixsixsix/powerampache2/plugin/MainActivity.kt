@@ -21,25 +21,41 @@
  */
 package luci.sixsixsix.powerampache2.plugin
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import dagger.hilt.android.AndroidEntryPoint
 import luci.sixsixsix.powerampache2.plugin.presentation.SongListScreen
 import luci.sixsixsix.powerampache2.plugin.presentation.delegates.BackPressHandler
 import luci.sixsixsix.powerampache2.plugin.presentation.delegates.BackPressHandlerImpl
 import luci.sixsixsix.powerampache2.ui.theme.PowerAmpache2Theme
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity(), BackPressHandler by BackPressHandlerImpl() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        openPowerAmpache2()
+        enableEdgeToEdge() // proper system bar handling
         handleOnBackPressed(this) // prevent the activity from being destroyed on back-press
-
-        // uncomment for testing, viewModel contains a few examples to get data
-        // testContent()
+        setContent {
+            PowerAmpache2Theme(
+                darkTheme = true,
+                dynamicColor = false
+            ) {
+                MainScreen(
+                    onBackClick = {
+                        onBackPressedDispatcher.onBackPressed()
+                    //    handleOnBackPressed(this)
+                    }
+                )
+            }
+        }
     }
 
     private fun testContent() {
@@ -56,12 +72,9 @@ class MainActivity : FragmentActivity(), BackPressHandler by BackPressHandlerImp
     /**
      * Launch another app by package name
      */
-    private fun openPowerAmpache2() {
+    private fun launchPowerAmpache2() {
         // TODO: add all possible package names
-        packageManager.getLaunchIntentForPackage("luci.sixsixsix.powerampache2.fdroid.debug")?.apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        }?.let { startActivity(it) }
-
+        openPowerAmpache2()
         finish()
     }
 }

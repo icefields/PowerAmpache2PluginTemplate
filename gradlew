@@ -40,6 +40,17 @@ cd "`dirname \"$PRG\"`/" >/dev/null
 APP_HOME="`pwd -P`"
 cd "$SAVED" >/dev/null
 
+# Prefer project-local JDK 21 when present (Gradle Kotlin DSL fails on JDK 26+ daemon).
+if [ -d "$APP_HOME/.jdks" ]; then
+    for _d in "$APP_HOME"/.jdks/jdk-21*; do
+        if [ -d "$_d" ] && [ -x "$_d/bin/java" ]; then
+            JAVA_HOME="$_d"
+            export JAVA_HOME
+            break
+        fi
+    done
+fi
+
 APP_NAME="Gradle"
 APP_BASE_NAME=`basename "$0"`
 

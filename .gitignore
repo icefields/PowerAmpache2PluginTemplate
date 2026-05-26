@@ -1,3 +1,15 @@
+# Author-provided PA2 dev APK (local only; do not commit)
+/*.apk
+
+# Project-local JDK 21 for Gradle (see AGENTS.md / gradlew)
+/.jdks/
+
+# Project-local Android SDK (sdk.dir in local.properties)
+/.android-sdk/
+
+# Per-iteration logcat slices captured by scripts/aa-logcat-slice.sh
+/.cursor/aa-logcat/
+
 *.iml
 .gradle
 /local.properties
@@ -13,3 +25,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+.idea/deploymentTargetSelector.xml
+.idea/vcs.xml
+

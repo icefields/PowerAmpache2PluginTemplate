@@ -79,11 +79,6 @@ val surfaceVariantLight = Color(0xFFDFE5E3)
 fun SongListScreen(viewModel: SongListViewModel = hiltViewModel()) {
     val uiState = viewModel.uiState.collectAsStateWithLifecycle()
     val queue = viewModel.queueStateFlow.collectAsState()
-    val highest = viewModel.highestAlbumsStateFlow.collectAsState()
-    val singleAlbum = viewModel.singleAlbumStateFlow.collectAsState()
-
-    if (singleAlbum.value.isNotEmpty())
-        println("aaaa " + singleAlbum.value[0].title)
 
     Scaffold(
         modifier = Modifier
@@ -113,10 +108,11 @@ fun SongListScreen(viewModel: SongListViewModel = hiltViewModel()) {
                // cutoutShape = null
             ) {
                 uiState.value.currentSong?.let { currentSong ->
+                    val trackTitle = currentSong.name.ifBlank { currentSong.title }
                     AsyncImage(
                         modifier = Modifier.aspectRatio(1f).fillMaxHeight(),
                         model = currentSong.imageUrl,
-                        contentDescription = currentSong.name
+                        contentDescription = trackTitle
                     )
                     Column(
                         modifier = Modifier
@@ -125,7 +121,7 @@ fun SongListScreen(viewModel: SongListViewModel = hiltViewModel()) {
                         verticalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = currentSong.name,
+                            text = trackTitle,
                             style = MaterialTheme.typography.titleMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -139,16 +135,16 @@ fun SongListScreen(viewModel: SongListViewModel = hiltViewModel()) {
                     }
 
                     IconButton(onClick = {  }) {
-                        Icon(Icons.Default.SkipPrevious, contentDescription = "Previous")
+                        Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.cd_previous))
                     }
                     IconButton(onClick = {  }) {
                         Icon(
                             if (uiState.value.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (uiState.value.isPlaying) "Pause" else "Play"
+                            contentDescription = if (uiState.value.isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play)
                         )
                     }
                     IconButton(onClick = {  }) {
-                        Icon(Icons.Default.SkipNext, contentDescription = "Next")
+                        Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.cd_next))
                     }
                 }
             }
@@ -172,6 +168,7 @@ fun SongListScreen(viewModel: SongListViewModel = hiltViewModel()) {
 
         LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
             items(queue.value) { song ->
+                val trackTitle = song.name.ifBlank { song.title }
                 Row(
                     modifier = Modifier
                         .padding(vertical = 0.dp)
@@ -186,12 +183,12 @@ fun SongListScreen(viewModel: SongListViewModel = hiltViewModel()) {
                     AsyncImage(
                         song.imageUrl,
                         modifier = Modifier.fillMaxWidth(0.2f).aspectRatio(1f).padding(4.dp),
-                        contentDescription = song.name
+                        contentDescription = trackTitle
                     )
                     Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                         Text(
                             modifier = Modifier.basicMarquee(),
-                            text = song.name,
+                            text = trackTitle,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
